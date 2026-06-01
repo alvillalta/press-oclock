@@ -63,7 +63,7 @@ class Settings(BaseSettings):
         if self.SUPABASE_DATABASE_URL:
             return self.SUPABASE_DATABASE_URL
         return PostgresDsn.build(
-            scheme="postgresql+psycopg2",
+            scheme="postgresql+psycopg",
             username=self.POSTGRES_USER,
             password=self.POSTGRES_PASSWORD,
             host=self.POSTGRES_SERVER,
