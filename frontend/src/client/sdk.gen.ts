@@ -119,7 +119,7 @@ export class ItemsService {
 export class LoginService {
     /**
      * Login Access Token
-     * OAuth2 compatible token login, get an access token for future requests
+     * JWT compatible token login, get an access token for future requests
      * @param data The data for the request.
      * @param data.formData
      * @returns Token Successful Response
