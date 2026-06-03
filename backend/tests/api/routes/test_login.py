@@ -15,10 +15,10 @@ from tests.utils.utils import random_email, random_lower_string
 
 def test_get_access_token(client: TestClient) -> None:
     login_data = {
-        "username": settings.FIRST_SUPERUSER,
+        "email": settings.FIRST_SUPERUSER,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/login/access-token", json=login_data)
     tokens = r.json()
     assert r.status_code == 200
     assert "access_token" in tokens
@@ -27,10 +27,10 @@ def test_get_access_token(client: TestClient) -> None:
 
 def test_get_access_token_incorrect_password(client: TestClient) -> None:
     login_data = {
-        "username": settings.FIRST_SUPERUSER,
+        "email": settings.FIRST_SUPERUSER,
         "password": "incorrect",
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_V1_STR}/login/access-token", json=login_data)
     assert r.status_code == 400
 
 
@@ -145,8 +145,8 @@ def test_login_with_bcrypt_password_upgrades_to_argon2(
 
     assert user.hashed_password.startswith("$2")
 
-    login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    login_data = {"email": email, "password": password}
+    r = client.post(f"{settings.API_V1_STR}/login/access-token", json=login_data)
     assert r.status_code == 200
     tokens = r.json()
     assert "access_token" in tokens
@@ -179,8 +179,8 @@ def test_login_with_argon2_password_keeps_hash(client: TestClient, db: Session) 
 
     original_hash = user.hashed_password
 
-    login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    login_data = {"email": email, "password": password}
+    r = client.post(f"{settings.API_V1_STR}/login/access-token", json=login_data)
     assert r.status_code == 200
     tokens = r.json()
     assert "access_token" in tokens
