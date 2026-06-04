@@ -53,7 +53,7 @@ class User(UserBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )
-    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+    mails: list["Mail"] = Relationship(back_populates="user", cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -68,44 +68,36 @@ class UsersPublic(SQLModel):
 
 
 # Shared properties
-class ItemBase(SQLModel):
-    title: str = Field(min_length=1, max_length=255)
-    description: str | None = Field(default=None, max_length=255)
+class MailBase(SQLModel):
+    title: str | None = Field(default=None, max_length=255)
+    content: str | None = Field(default=None)
+    source_email: EmailStr = Field(default=None, max_length=255)
+    received_at: datetime = Field( 
+        sa_type=DateTime(timezone=True))
 
 
-# Properties to receive on item creation
-class ItemCreate(ItemBase):
+# Properties to receive on mail creation
+class MailCreate(MailBase):
     pass
 
 
-# Properties to receive on item update
-class ItemUpdate(ItemBase):
-    title: str | None = Field(default=None, min_length=1, max_length=255)  # type: ignore[assignment]
+# Properties to receive on mail update
+class MailUpdate(SQLModel):
+    title: str | None = Field(default=None, max_length=255)
+    content: str | None = Field(default=None)
 
 
 # Database model, database table inferred from class name
-class Item(ItemBase, table=True):
+class Mail(MailBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    created_at: datetime | None = Field(
-        default_factory=get_datetime_utc,
-        sa_type=DateTime(timezone=True),  # type: ignore
-    )
-    owner_id: uuid.UUID = Field(
+    user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
-    owner: User | None = Relationship(back_populates="items")
-
-
-# Properties to return via API, id is always required
-class ItemPublic(ItemBase):
-    id: uuid.UUID
-    owner_id: uuid.UUID
-    created_at: datetime | None = None
-
-
-class ItemsPublic(SQLModel):
-    data: list[ItemPublic]
-    count: int
+    user: User | None = Relationship(back_populates="mails")
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
 
 
 # Generic message

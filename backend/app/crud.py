@@ -4,7 +4,7 @@ from typing import Any
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import Item, ItemCreate, User, UserCreate, UserUpdate
+from app.models import Mail, MailCreate, MailUpdate, User, UserCreate, UserUpdate
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -60,9 +60,9 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
     return db_user
 
 
-def create_item(*, session: Session, item_in: ItemCreate, owner_id: uuid.UUID) -> Item:
-    db_item = Item.model_validate(item_in, update={"owner_id": owner_id})
-    session.add(db_item)
+def create_mail(*, session: Session, mail_in: MailCreate, user_id: uuid.UUID) -> Mail:
+    db_mail = Mail.model_validate(mail_in, update={"user_id": user_id})
+    session.add(db_mail)
     session.commit()
-    session.refresh(db_item)
-    return db_item
+    session.refresh(db_mail)
+    return db_mail
