@@ -1,11 +1,12 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from sqlmodel import col, func, select
 
 from app.api.deps import CurrentUser, SessionDep
-from app.models import Mail, MailCreate, MailUpdate, Message
+from app.models import Mail, MailUpdate, Message
+from app.services.mail_service import MailService
 
 router = APIRouter(prefix="/mails", tags=["mails"])
 
@@ -57,17 +58,23 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
 
 
 @router.post("/", response_model=Mail)
-def create_mail(
-    *, session: SessionDep, current_user: CurrentUser, mail_in: MailCreate
-) -> Any:
+def ingest_mail(
+    *, session: SessionDep, current_user: CurrentUser, mail_data: dict = Body(
+        ...,
+        example={
+            "source_email": "user@example.com",
+            "title": "Hello",
+            "content": "Mail text content",
+            "received_at": "2026-06-06T12:00:00Z",
+            "extra_field": "variable value"
+        }
+    )
+) -> Mail:
     """
-    Create new mail.
+    Ingest a new mail from any external source, validating the input and persisting it.
     """
-    mail = Mail.model_validate(mail_in, update={"user_id": current_user.id})
-    session.add(mail)
-    session.commit()
-    session.refresh(mail)
-    return mail
+    mail_service = MailService(session=session)
+    return mail_service.process_mail(user_id=current_user.id, mail_data=mail_data)
 
 
 @router.put("/{id}", response_model=Mail)
