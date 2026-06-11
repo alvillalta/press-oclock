@@ -4,8 +4,9 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Depends
 from sqlmodel import col, func, select
 
-from app.api.deps import ApiKeyDep, CurrentUser, SessionDep
-from app.models import Mail, MailUpdate, Message
+from app.api.deps import CurrentUser, SessionDep
+from app.core.config import settings
+from app.models import Mail, MailData, MailUpdate, Message
 from app.services.mail_service import MailService
 from app.core.logging import get_logger
 
@@ -61,26 +62,23 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
 
 @router.post("/", response_model=Mail)
 def ingest_mail(
-    *, session: SessionDep, api_key: ApiKeyDep, mail_data: dict = Body(
-        ...,
-        example={
-            "source_email": "user@example.com",
-            "title": "Hello",
-            "content": "Mail text content",
-            "received_at": "2026-06-06T12:00:00Z",
-            "extra_field": "variable value"
-        }
-    )
-) -> Any:  #Mail
+    *, session: SessionDep, mail_data: MailData
+) -> Mail:
     """
     Ingest a new mail directly into the system.
     """
-    logger.info("ingest_mail payload=%s", mail_data)
-    response = mail_data
-    logger.info("ingest_mail response=%s", response)
-    return response
-    """ mail_service = MailService(session=session)
-    return mail_service.process_mail(user_id=current_user.id, mail_data=mail_data) """
+    if settings.MAIL_WEBHOOK_USER_ID is None:
+        raise HTTPException(
+            status_code=500,
+            detail="MAIL_WEBHOOK_USER_ID must be configured for the webhook user",
+        )
+
+    logger.info(f"Receiving mail from {mail_data.sender}")
+    mail_service = MailService(session=session)
+
+    return mail_service.process_mail(
+        mail_data=mail_data, user_id=settings.MAIL_WEBHOOK_USER_ID
+    )
 
 
 @router.put("/{id}", response_model=Mail)

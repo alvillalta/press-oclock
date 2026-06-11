@@ -66,14 +66,19 @@ class UsersPublic(SQLModel):
     data: list[UserPublic]
     count: int
 
-
+    
 # Shared properties
 class MailBase(SQLModel):
-    title: str | None = Field(default=None, max_length=255)
-    content: str | None = Field(default=None)
-    source_email: EmailStr = Field(default=None, max_length=255)
-    received_at: datetime = Field( 
+    subject: str | None = Field(default=None, max_length=255)
+    body: str | None = Field(default=None)
+    sender: EmailStr = Field(max_length=255)
+    date: datetime = Field( 
         sa_type=DateTime(timezone=True))
+
+
+# External Mail model
+class MailData(MailBase):
+    pass
 
 
 # Properties to receive on mail creation
@@ -83,8 +88,8 @@ class MailCreate(MailBase):
 
 # Properties to receive on mail update
 class MailUpdate(SQLModel):
-    title: str | None = Field(default=None, max_length=255)
-    content: str | None = Field(default=None)
+    subject: str | None = Field(default=None, max_length=255)
+    body: str | None = Field(default=None)
 
 
 # Database model, database table inferred from class name

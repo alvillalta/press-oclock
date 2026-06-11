@@ -1,4 +1,4 @@
-import uuid
+from uuid import UUID
 from typing import Any
 
 from sqlmodel import Session, select
@@ -60,7 +60,7 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
     return db_user
 
 
-def create_mail(*, session: Session, mail_in: MailCreate, user_id: uuid.UUID) -> Mail:
+def create_mail(*, session: Session, mail_in: MailCreate, user_id: UUID) -> Mail:
     db_mail = Mail.model_validate(mail_in, update={"user_id": user_id})
     session.add(db_mail)
     session.commit()
