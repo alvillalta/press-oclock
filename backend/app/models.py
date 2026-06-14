@@ -67,7 +67,7 @@ class UsersPublic(SQLModel):
     count: int
 
     
-# Shared properties
+# Mail shared properties
 class MailBase(SQLModel):
     subject: str | None = Field(default=None, max_length=255)
     body: str | None = Field(default=None)
@@ -92,7 +92,7 @@ class MailUpdate(SQLModel):
     body: str | None = Field(default=None)
 
 
-# Database model, database table inferred from class name
+# Database model
 class Mail(MailBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(
@@ -103,7 +103,37 @@ class Mail(MailBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
     )
+    chunks: list["Chunk"] = Relationship(back_populates="mail", cascade_delete=True)
 
+
+# MailChunk shared properties
+class ChunkBase(SQLModel):
+    chunk_text: str = Field(max_length=1000)
+    chunk_index: int = Field(gt=0)
+
+
+# Properties to receive on chunk creation
+class ChunkCreate(ChunkBase):
+    pass
+
+
+# Properties to receive on chunk update
+class ChunkUpdate(ChunkBase):
+    pass
+
+
+# Database model
+class Chunk(ChunkBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    mail_id: uuid.UUID = Field(
+        foreign_key="mail.id", nullable=False, ondelete="CASCADE"
+    )
+    mail: Mail | None = Relationship(back_populates="chunks")
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+    
 
 # Generic message
 class Message(SQLModel):
