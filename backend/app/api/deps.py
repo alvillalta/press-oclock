@@ -3,7 +3,7 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 from pydantic import ValidationError
 from sqlmodel import Session
@@ -14,7 +14,7 @@ from app.core.db import engine
 from app.models import TokenPayload, User
 
 bearer_scheme = HTTPBearer()
-
+api_key_header = APIKeyHeader(name="X-API-Key")
 
 def get_db() -> Generator[Session, None, None]:
     with Session(engine) as session:
@@ -58,3 +58,15 @@ def get_current_active_superuser(current_user: CurrentUser) -> User:
             status_code=403, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+
+def verify_api_key(api_key: Annotated[str, Depends(api_key_header)]) -> str:
+    if api_key != settings.API_KEY_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key",
+        )
+    return api_key
+
+
+ApiKeyDep = Annotated[str, Depends(verify_api_key)]

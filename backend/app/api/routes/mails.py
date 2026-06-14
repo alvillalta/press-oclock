@@ -1,14 +1,18 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Depends
 from sqlmodel import col, func, select
 
 from app.api.deps import CurrentUser, SessionDep
-from app.models import Mail, MailCreate, MailUpdate, Message
+from app.core.config import settings
+from app.models import Mail, MailData, MailUpdate, Message
+from app.services.mail_service import MailService
+from app.core.logging import get_logger
 
 router = APIRouter(prefix="/mails", tags=["mails"])
 
+logger = get_logger(__name__)
 
 @router.get("/", response_model=list[Mail])
 def read_mails(
@@ -57,17 +61,24 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
 
 
 @router.post("/", response_model=Mail)
-def create_mail(
-    *, session: SessionDep, current_user: CurrentUser, mail_in: MailCreate
-) -> Any:
+def ingest_mail(
+    *, session: SessionDep, mail_data: MailData
+) -> Mail:
     """
-    Create new mail.
+    Ingest a new mail directly into the system.
     """
-    mail = Mail.model_validate(mail_in, update={"user_id": current_user.id})
-    session.add(mail)
-    session.commit()
-    session.refresh(mail)
-    return mail
+    if settings.MAIL_WEBHOOK_USER_ID is None:
+        raise HTTPException(
+            status_code=500,
+            detail="MAIL_WEBHOOK_USER_ID must be configured for the webhook user",
+        )
+
+    logger.info(f"Receiving mail from {mail_data.sender}")
+    mail_service = MailService(session=session)
+
+    return mail_service.process_mail(
+        mail_data=mail_data, user_id=settings.MAIL_WEBHOOK_USER_ID
+    )
 
 
 @router.put("/{id}", response_model=Mail)

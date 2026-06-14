@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from app.integrations import email_provider
 import emails  # type: ignore[import-untyped]
 import jwt
 from jinja2 import Template

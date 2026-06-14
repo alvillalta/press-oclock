@@ -1,4 +1,5 @@
 import secrets
+import uuid
 import warnings
 from typing import Annotated, Any, Literal
 
@@ -32,6 +33,7 @@ class Settings(BaseSettings):
     )
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
+    API_KEY_SECRET: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
@@ -88,6 +90,7 @@ class Settings(BaseSettings):
         return self
 
     EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
+    MAIL_WEBHOOK_USER_ID: uuid.UUID | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
