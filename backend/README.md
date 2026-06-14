@@ -7,6 +7,9 @@
 - .venv\Scripts\Activate.ps1
 - python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
+Para funcionalidad con Make en desarrollo, abrir segunda terminal a la vez que Uvicorn reload:
+- ngrok http 8000 
+
 ## Requirements
 
 * [Docker](https://www.docker.com/).
