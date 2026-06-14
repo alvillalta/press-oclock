@@ -70,7 +70,6 @@ class UsersPublic(SQLModel):
 # Mail shared properties
 class MailBase(SQLModel):
     subject: str | None = Field(default=None, max_length=255)
-    body: str | None = Field(default=None)
     sender: EmailStr = Field(max_length=255)
     date: datetime = Field( 
         sa_type=DateTime(timezone=True))
@@ -78,7 +77,7 @@ class MailBase(SQLModel):
 
 # External Mail model
 class MailData(MailBase):
-    pass
+    body: str | None = Field(default=None)
 
 
 # Properties to receive on mail creation
@@ -108,7 +107,7 @@ class Mail(MailBase, table=True):
 
 # MailChunk shared properties
 class ChunkBase(SQLModel):
-    chunk_text: str = Field(max_length=1000)
+    chunk_text: str = Field(max_length=1500)
     chunk_index: int = Field(gt=0)
 
 
@@ -118,8 +117,8 @@ class ChunkCreate(ChunkBase):
 
 
 # Properties to receive on chunk update
-class ChunkUpdate(ChunkBase):
-    pass
+class ChunkUpdate(SQLModel):
+    chunk_text: str = Field(max_length=1500)
 
 
 # Database model
@@ -144,6 +143,7 @@ class Message(SQLModel):
 class LoginRequest(SQLModel):
     email: EmailStr
     password: str
+
 
 # JSON payload containing access token
 class Token(SQLModel):

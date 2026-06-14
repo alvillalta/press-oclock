@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
+from app.rag.chunking import ChunkingService
 from sqlmodel import Session
 
 from app.core.logging import get_logger
-from app.models import Mail, MailCreate, MailData
-from app.crud import create_mail
+from app.models import Chunk, ChunkCreate, Mail, MailCreate, MailData, Message
+from app.crud import create_mail, create_chunks
 
 logger = get_logger(__name__)
 
@@ -19,11 +20,17 @@ class MailService:
         """
         logger.info(f"Processing mail")
 
-        mail_in = MailCreate(
-            subject=mail_data.subject,
-            sender=mail_data.sender,
-            body=mail_data.body,
-            date=mail_data.date or datetime.now(timezone.utc),
-        )
+        chunking_service = ChunkingService()
+        chunks = chunking_service.chunk_email_body(mail_data.body or "")
 
-        return create_mail(session=self.session, mail_in=mail_in, user_id=user_id) 
+        mail = MailCreate(
+                subject=mail_data.subject,
+                sender=mail_data.sender,
+                date=mail_data.date or datetime.now(timezone.utc),
+            )
+        db_mail = create_mail(session=self.session, mail_in=mail, user_id=user_id) 
+
+        if chunks:
+            create_chunks(session=self.session, chunks_in=chunks, mail_in=db_mail)
+
+        return db_mail
