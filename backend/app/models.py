@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pydantic import EmailStr
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
+from pgvector.sqlalchemy import Vector
 
 
 def get_datetime_utc() -> datetime:
@@ -111,9 +112,8 @@ class ChunkBase(SQLModel):
     chunk_index: int = Field(gt=0)
 
 
-# Properties to receive on chunk creation
 class ChunkCreate(ChunkBase):
-    pass
+    embedding: list[float] = Field(sa_type=Vector(1536))
 
 
 # Properties to receive on chunk update
@@ -122,7 +122,7 @@ class ChunkUpdate(SQLModel):
 
 
 # Database model
-class Chunk(ChunkBase, table=True):
+class Chunk(ChunkCreate, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     mail_id: uuid.UUID = Field(
         foreign_key="mail.id", nullable=False, ondelete="CASCADE"

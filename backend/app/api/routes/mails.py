@@ -61,7 +61,7 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
 
 
 @router.post("/", response_model=Mail)
-def ingest_mail(
+async def ingest_mail(
     *, session: SessionDep, mail_data: MailData
 ) -> Mail:
     """
@@ -76,7 +76,7 @@ def ingest_mail(
     logger.info(f"Receiving mail from {mail_data.sender}")
     mail_service = MailService(session=session)
 
-    return mail_service.process_mail(
+    return await mail_service.process_mail(
         mail_data=mail_data, user_id=settings.MAIL_WEBHOOK_USER_ID
     )
 
