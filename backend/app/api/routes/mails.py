@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException, Depends
 from sqlmodel import col, func, select
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, MakeApiKeyDep, SessionDep
 from app.core.config import settings
 from app.models import Mail, MailData, MailUpdate, Message
 from app.services.mail_service import MailService
@@ -62,7 +62,7 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
 
 @router.post("/", response_model=Mail)
 async def ingest_mail(
-    *, session: SessionDep, mail_data: MailData
+    *, session: SessionDep, mail_data: MailData, api_key: MakeApiKeyDep
 ) -> Mail:
     """
     Ingest a new mail directly into the system.

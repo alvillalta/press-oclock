@@ -60,8 +60,8 @@ def get_current_active_superuser(current_user: CurrentUser) -> User:
     return current_user
 
 
-def verify_api_key(api_key: Annotated[str, Depends(api_key_header)]) -> str:
-    if api_key != settings.API_KEY_SECRET:
+def verify_make_api_key(api_key: Annotated[str, Depends(api_key_header)]) -> str:
+    if api_key != settings.MAKE_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key",
@@ -69,4 +69,4 @@ def verify_api_key(api_key: Annotated[str, Depends(api_key_header)]) -> str:
     return api_key
 
 
-ApiKeyDep = Annotated[str, Depends(verify_api_key)]
+MakeApiKeyDep = Annotated[str, Depends(verify_make_api_key)]

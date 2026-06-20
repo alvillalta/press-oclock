@@ -4,7 +4,7 @@ from typing import Any
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import ChunkCreate, Chunk, Mail, MailCreate, User, UserCreate, UserUpdate
+from app.models import ChunkCreate, Chunk, Mail, MailCreate, Message, Question, QuestionBase, QuestionCreate, User, UserCreate, UserUpdate
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -74,4 +74,12 @@ def create_chunks(*, session: Session, chunks_in: list[ChunkCreate], mail_in: Ma
         session.add(db_chunk)
     session.commit()
     session.refresh(mail_in)
-    return mail_in
+    return Message(message="Chunks created successfully")
+
+
+def create_question(*, session: Session, question_in: QuestionCreate, user_id: UUID) -> Question:
+    db_question = Question.model_validate(question_in, update={"user_id": user_id})
+    session.add(db_question)
+    session.commit()
+    session.refresh(db_question)
+    return db_question

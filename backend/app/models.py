@@ -1,7 +1,8 @@
 import uuid
+from typing import Annotated
 from datetime import datetime, timezone
 
-from pydantic import EmailStr
+from pydantic import EmailStr, StringConstraints
 from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
 from pgvector.sqlalchemy import Vector
@@ -55,6 +56,7 @@ class User(UserBase, table=True):
         sa_type=DateTime(timezone=True),  # type: ignore
     )
     mails: list["Mail"] = Relationship(back_populates="user", cascade_delete=True)
+    questions: list["Question"] = Relationship(back_populates="user", cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -92,7 +94,7 @@ class MailUpdate(SQLModel):
     body: str | None = Field(default=None)
 
 
-# Database model
+# Mail database model
 class Mail(MailBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(
@@ -106,9 +108,12 @@ class Mail(MailBase, table=True):
     chunks: list["Chunk"] = Relationship(back_populates="mail", cascade_delete=True)
 
 
-# MailChunk shared properties
+# Chunk shared properties
 class ChunkBase(SQLModel):
-    chunk_text: str = Field(max_length=1500)
+    chunk_text: str = Field(
+        min_length=1, 
+        max_length=900, 
+    )
     chunk_index: int = Field(gt=0)
 
 
@@ -118,16 +123,50 @@ class ChunkCreate(ChunkBase):
 
 # Properties to receive on chunk update
 class ChunkUpdate(SQLModel):
-    chunk_text: str = Field(max_length=1500)
+    chunk_text: str = Field(
+        min_length=1, 
+        max_length=900, 
+    )
 
 
-# Database model
+# Chunk database model
 class Chunk(ChunkCreate, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     mail_id: uuid.UUID = Field(
         foreign_key="mail.id", nullable=False, ondelete="CASCADE"
     )
     mail: Mail | None = Relationship(back_populates="chunks")
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+
+
+# Question shared properties
+QuestionBase = Annotated[
+        str, 
+        StringConstraints(min_length=1, max_length=900, strip_whitespace=True)
+    ]
+
+
+QuestionEmbedding = Annotated[
+        list[float],
+        Field(sa_type=Vector(1536))
+    ]
+
+
+class QuestionCreate(SQLModel):
+    question: QuestionBase
+    # asnwer: AQUÍ VENDRÁ EL CAMPO ANSWER
+
+
+# Question database model
+class Question(QuestionCreate, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    user: User | None = Relationship(back_populates="questions")
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),

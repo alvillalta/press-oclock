@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
+from sqlmodel import Session
 from app.rag.chunking import ChunkingTextService
 from app.rag.embeddings import ChunkingEmbeddingService
-from sqlmodel import Session
 
 from app.core.logging import get_logger
-from app.models import ChunkBase, Mail, MailCreate, MailData, Message
+from app.models import Mail, MailCreate, MailData
 from app.crud import create_mail, create_chunks
 
 logger = get_logger(__name__)
@@ -21,8 +21,9 @@ class MailService:
         """
         logger.info(f"Processing mail")
 
-        chunking_text_service = ChunkingTextService()
-        chunks = chunking_text_service.chunk_email_body(mail_data.body or "")
+        if isinstance(mail_data.body, str) and mail_data.body.strip():
+            chunking_text_service = ChunkingTextService()
+            chunks = chunking_text_service.chunk_email_body(mail_data.body)
 
         mail = MailCreate(
                 subject=mail_data.subject,
@@ -34,7 +35,6 @@ class MailService:
         if chunks:
             chunking_embedding_service = ChunkingEmbeddingService()
             embedded_chunks = await chunking_embedding_service.create_chunk_embeddings(chunks)
-            print(len(embedded_chunks[0].embedding))
 
             create_chunks(session=self.session, chunks_in=embedded_chunks, mail_in=db_mail)
 
