@@ -53,7 +53,7 @@ async def generate_chunk_embeddings(
     return results
 
 async def generate_question_embedding(
-    question:QuestionBase,
+    question: QuestionBase,
     max_retries,
     wait_seconds
 ) -> QuestionEmbedding:
@@ -94,5 +94,4 @@ class ChunkingEmbeddingService:
     async def create_question_embedding(self, question: QuestionBase) -> QuestionEmbedding:
         """Crea un embedding para una pregunta."""
         return await generate_question_embedding(question, self.max_retries, self.wait_seconds)
-    
     

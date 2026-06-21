@@ -6,7 +6,7 @@ from sqlmodel import col, func, select
 
 from app.api.deps import CurrentUser, MakeApiKeyDep, SessionDep
 from app.core.config import settings
-from app.models import Mail, MailData, MailUpdate, Message
+from app.models import Mail, MailData, Message
 from app.services.mail_service import MailService
 from app.core.logging import get_logger
 
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 @router.get("/", response_model=list[Mail])
 def read_mails(
     session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
-) -> Any:
+) -> list[Mail]:
     """
     Retrieve mails.
     """
@@ -48,14 +48,14 @@ def read_mails(
 
 
 @router.get("/{id}", response_model=Mail)
-def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
+def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Mail:
     """
     Get mail by ID.
     """
     mail = session.get(Mail, id)
     if not mail:
         raise HTTPException(status_code=404, detail="Mail not found")
-    if not current_user.is_superuser and (mail.user_id != current_user.id):
+    if (mail.user_id != current_user.id) and (not current_user.is_superuser):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return mail
 
@@ -65,7 +65,7 @@ async def ingest_mail(
     *, session: SessionDep, mail_data: MailData, api_key: MakeApiKeyDep
 ) -> Mail:
     """
-    Ingest a new mail directly into the system.
+    Ingest a new mail with embeddings directly into the system.
     """
     if settings.MAIL_WEBHOOK_USER_ID is None:
         raise HTTPException(
@@ -81,30 +81,6 @@ async def ingest_mail(
     )
 
 
-@router.put("/{id}", response_model=Mail)
-def update_mail(
-    *,
-    session: SessionDep,
-    current_user: CurrentUser,
-    id: uuid.UUID,
-    mail_in: MailUpdate,
-) -> Any:
-    """
-    Update a mail.
-    """
-    mail = session.get(Mail, id)
-    if not mail:
-        raise HTTPException(status_code=404, detail="Mail not found")
-    if not current_user.is_superuser and (mail.user_id != current_user.id):
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    update_dict = mail_in.model_dump(exclude_unset=True)
-    mail.sqlmodel_update(update_dict)
-    session.add(mail)
-    session.commit()
-    session.refresh(mail)
-    return mail
-
-
 @router.delete("/{id}")
 def delete_mail(
     session: SessionDep, current_user: CurrentUser, id: uuid.UUID
@@ -115,7 +91,7 @@ def delete_mail(
     mail = session.get(Mail, id)
     if not mail:
         raise HTTPException(status_code=404, detail="Mail not found")
-    if not current_user.is_superuser and (mail.user_id != current_user.id):
+    if (mail.user_id != current_user.id) and (not current_user.is_superuser):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     session.delete(mail)
     session.commit()

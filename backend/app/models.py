@@ -74,8 +74,7 @@ class UsersPublic(SQLModel):
 class MailBase(SQLModel):
     subject: str | None = Field(default=None, max_length=255)
     sender: EmailStr = Field(max_length=255)
-    date: datetime = Field( 
-        sa_type=DateTime(timezone=True))
+    date: datetime = Field(sa_type=DateTime(timezone=True))
 
 
 # External Mail model
@@ -86,12 +85,6 @@ class MailData(MailBase):
 # Properties to receive on mail creation
 class MailCreate(MailBase):
     pass
-
-
-# Properties to receive on mail update
-class MailUpdate(SQLModel):
-    subject: str | None = Field(default=None, max_length=255)
-    body: str | None = Field(default=None)
 
 
 # Mail database model
