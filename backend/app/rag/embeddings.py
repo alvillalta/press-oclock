@@ -4,7 +4,7 @@ from typing import List
 
 from app.core.config import settings
 from app.core.openai_client import get_openai_client
-from app.models import ChunkCreate, ChunkBase, QuestionBase, QuestionEmbedding
+from app.models import ChunkBase, ChunkCreate, QuestionBase, QuestionEmbedding
 
 logger = logging.getLogger(__name__)
 

@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlmodel import Session
 from app.rag.embeddings import ChunkingEmbeddingService
+from app.rag.retrieval import RetrievalService
 
 from app.core.logging import get_logger
 from app.models import Question, QuestionBase, QuestionCreate 
@@ -22,7 +23,14 @@ class RagService:
 
         chunking_embedding_service = ChunkingEmbeddingService()
         embedded_question = await chunking_embedding_service.create_question_embedding(question_in)
-        print("Embedded question: ", embedded_question)
+        
+        retrieval_service = RetrievalService()
+        similar_chunks = retrieval_service.search_similar_chunks(session=self.session, embedded_question=embedded_question, user_id=user_id)
+        if not similar_chunks:
+            raise ValueError("No chunks found for current user")
+        
+        for chunk in similar_chunks:
+            print(chunk.chunk_text)
 
         question_to_db = QuestionCreate(question=question_in) 
         db_question = create_question(session=self.session, question_in=question_to_db, user_id=user_id)

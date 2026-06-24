@@ -71,9 +71,12 @@ async def create_question(
     logger.info("Routing question")
     question_service = RagService(session=session)
 
-    return await question_service.answer_question(
-        question_in=question_in, user_id=current_user.id
-    )
+    try:
+        return await question_service.answer_question(
+            question_in=question_in, user_id=current_user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.delete("/{id}")
