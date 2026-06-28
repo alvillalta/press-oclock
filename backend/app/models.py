@@ -1,10 +1,10 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Any, TypeAlias, TypedDict
 from datetime import datetime, timezone
 
 from pydantic import EmailStr, StringConstraints
 from sqlalchemy import DateTime
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import JSON, Field, Relationship, SQLModel
 from pgvector.sqlalchemy import Vector
 
 
@@ -69,7 +69,7 @@ class UsersPublic(SQLModel):
     data: list[UserPublic]
     count: int
 
-    
+
 # Mail shared properties
 class MailBase(SQLModel):
     subject: str | None = Field(default=None, max_length=255)
@@ -105,7 +105,7 @@ class Mail(MailBase, table=True):
 class ChunkBase(SQLModel):
     chunk_text: str = Field(
         min_length=1, 
-        max_length=900, 
+        max_length=800, 
     )
     chunk_index: int = Field(gt=0)
 
@@ -118,7 +118,7 @@ class ChunkCreate(ChunkBase):
 class ChunkUpdate(SQLModel):
     chunk_text: str = Field(
         min_length=1, 
-        max_length=900, 
+        max_length=800, 
     )
 
 
@@ -135,10 +135,18 @@ class Chunk(ChunkCreate, table=True):
     )
 
 
+class AugmentedMailChunksGroup(TypedDict):
+    mail_id: uuid.UUID
+    subject: str | None
+    sender: EmailStr
+    date: datetime
+    chunk_list: list[Chunk]
+
+
 # Question shared properties
 QuestionBase = Annotated[
         str, 
-        StringConstraints(min_length=1, max_length=900, strip_whitespace=True)
+        StringConstraints(min_length=1, max_length=800, strip_whitespace=True)
     ]
 
 
@@ -148,9 +156,18 @@ QuestionEmbedding = Annotated[
     ]
 
 
+class Sources(MailBase):
+    mail_id: uuid.UUID = Field(foreign_key="mail.id", nullable=False, ondelete="CASCADE")
+    chunk_text: str = Field(
+        min_length=1, 
+        max_length=800, 
+    )
+
+
 class QuestionCreate(SQLModel):
     question: QuestionBase
-    # asnwer: AQUÍ VENDRÁ EL CAMPO ANSWER
+    answer: str
+    sources: list[dict] = Field(default_factory=list, sa_type=JSON)
 
 
 # Question database model
