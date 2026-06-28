@@ -4,7 +4,7 @@ from typing import List
 
 from app.core.config import settings
 from app.core.openai_client import get_openai_client
-from app.models import ChunkCreate, ChunkBase, QuestionBase, QuestionEmbedding
+from app.models import ChunkBase, ChunkCreate, QuestionBase, QuestionEmbedding
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +14,16 @@ async def generate_chunk_embeddings(
     chunks: List[ChunkBase],  # cada chunk: {"chunk_index": ..., "chunk_text": ...}
     batch_size,
     max_retries,
-    wait_seconds
+    wait_seconds,
+    overlaped_characters
 ) -> List[ChunkCreate]:
     """
     Crea embeddings para una lista de chunks.
     """
     results: List[ChunkCreate] = []
 
-    for i in range(0, len(chunks), batch_size):
-        batch = chunks[i : i + batch_size]
+    for index in range(0, len(chunks), batch_size):
+        batch = chunks[index : index + batch_size]
         inputs = [chunk.chunk_text for chunk in batch]
 
         for attempt in range(1, max_retries + 1):
@@ -42,10 +43,20 @@ async def generate_chunk_embeddings(
             raise ValueError("Mismatch between number of chunks and embeddings returned")
         
         for chunk, datum in zip(batch, response.data):
+            # Quita el ovelap del texto de los chunks antes de guardar en la db
+            if chunk.chunk_index == 1:
+                chunk_text_to_store = chunk.chunk_text
+            else:
+                if len(chunk.chunk_text) <= overlaped_characters:
+                    continue
+                chunk_text_to_store = chunk.chunk_text[overlaped_characters:]
+            if not chunk_text_to_store.strip():
+                continue
+
             results.append(
                 ChunkCreate(
                     chunk_index=chunk.chunk_index,
-                    chunk_text=chunk.chunk_text,
+                    chunk_text=chunk_text_to_store,
                     embedding=datum.embedding,
                 )
             )
@@ -82,14 +93,15 @@ async def generate_question_embedding(
 class ChunkingEmbeddingService:
     """Servicio para generar embeddings."""
     
-    def __init__(self, batch_size: int = 100, max_retries: int = 3, wait_seconds: int = 2):
+    def __init__(self, batch_size: int = 100, max_retries: int = 3, wait_seconds: int = 2, overlaped_characters: int = 100):
         self.batch_size = batch_size
         self.max_retries = max_retries
         self.wait_seconds = wait_seconds
+        self.overlaped_characters = overlaped_characters  
     
     async def create_chunk_embeddings(self, chunks: List[ChunkBase]) -> List[ChunkCreate]:
         """Crea embeddings para una lista de chunks."""
-        return await generate_chunk_embeddings(chunks, self.batch_size, self.max_retries, self.wait_seconds)
+        return await generate_chunk_embeddings(chunks, self.batch_size, self.max_retries, self.wait_seconds, self.overlaped_characters)
     
     async def create_question_embedding(self, question: QuestionBase) -> QuestionEmbedding:
         """Crea un embedding para una pregunta."""

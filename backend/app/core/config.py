@@ -108,6 +108,7 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str
     EMBEDDING_MODEL: str
+    GENERATION_MODEL: str
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
