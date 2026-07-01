@@ -71,15 +71,9 @@ export const HTTPValidationErrorSchema = {
     title: 'HTTPValidationError'
 } as const;
 
-export const ItemCreateSchema = {
+export const MailSchema = {
     properties: {
-        title: {
-            type: 'string',
-            maxLength: 255,
-            minLength: 1,
-            title: 'Title'
-        },
-        description: {
+        subject: {
             anyOf: [
                 {
                     type: 'string',
@@ -89,78 +83,43 @@ export const ItemCreateSchema = {
                     type: 'null'
                 }
             ],
-            title: 'Description'
-        }
-    },
-    type: 'object',
-    required: ['title'],
-    title: 'ItemCreate'
-} as const;
-
-export const ItemPublicSchema = {
-    properties: {
-        title: {
+            title: 'Subject'
+        },
+        sender: {
             type: 'string',
             maxLength: 255,
-            minLength: 1,
-            title: 'Title'
+            format: 'email',
+            title: 'Sender'
         },
-        description: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 255
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Description'
+        date: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Date'
         },
         id: {
             type: 'string',
             format: 'uuid',
             title: 'Id'
         },
-        owner_id: {
+        user_id: {
             type: 'string',
             format: 'uuid',
-            title: 'Owner Id'
+            title: 'User Id'
         },
         created_at: {
-            anyOf: [
-                {
-                    type: 'string',
-                    format: 'date-time'
-                },
-                {
-                    type: 'null'
-                }
-            ],
+            type: 'string',
+            format: 'date-time',
             title: 'Created At'
         }
     },
     type: 'object',
-    required: ['title', 'id', 'owner_id'],
-    title: 'ItemPublic'
+    required: ['sender', 'date', 'user_id'],
+    title: 'Mail'
 } as const;
 
-export const ItemUpdateSchema = {
+export const MailDataSchema = {
     properties: {
-        title: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 255,
-                    minLength: 1
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Title'
-        },
-        description: {
+        subject: {
             anyOf: [
                 {
                     type: 'string',
@@ -170,30 +129,34 @@ export const ItemUpdateSchema = {
                     type: 'null'
                 }
             ],
-            title: 'Description'
-        }
-    },
-    type: 'object',
-    title: 'ItemUpdate'
-} as const;
-
-export const ItemsPublicSchema = {
-    properties: {
-        data: {
-            items: {
-                '$ref': '#/components/schemas/ItemPublic'
-            },
-            type: 'array',
-            title: 'Data'
+            title: 'Subject'
         },
-        count: {
-            type: 'integer',
-            title: 'Count'
+        sender: {
+            type: 'string',
+            maxLength: 255,
+            format: 'email',
+            title: 'Sender'
+        },
+        date: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Date'
+        },
+        body: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Body'
         }
     },
     type: 'object',
-    required: ['data', 'count'],
-    title: 'ItemsPublic'
+    required: ['sender', 'date'],
+    title: 'MailData'
 } as const;
 
 export const MessageSchema = {
@@ -249,6 +212,47 @@ export const PrivateUserCreateSchema = {
     type: 'object',
     required: ['email', 'password', 'full_name'],
     title: 'PrivateUserCreate'
+} as const;
+
+export const QuestionSchema = {
+    properties: {
+        question: {
+            type: 'string',
+            maxLength: 800,
+            minLength: 1,
+            title: 'Question'
+        },
+        answer: {
+            type: 'string',
+            title: 'Answer'
+        },
+        sources: {
+            items: {
+                additionalProperties: true,
+                type: 'object'
+            },
+            type: 'array',
+            title: 'Sources'
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        user_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'User Id'
+        },
+        created_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['question', 'answer', 'user_id'],
+    title: 'Question'
 } as const;
 
 export const TokenSchema = {
@@ -418,16 +422,9 @@ export const UserRegisterSchema = {
 export const UserUpdateSchema = {
     properties: {
         email: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 255,
-                    format: 'email'
-                },
-                {
-                    type: 'null'
-                }
-            ],
+            type: 'string',
+            maxLength: 255,
+            format: 'email',
             title: 'Email'
         },
         is_active: {
@@ -453,20 +450,14 @@ export const UserUpdateSchema = {
             title: 'Full Name'
         },
         password: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 128,
-                    minLength: 8
-                },
-                {
-                    type: 'null'
-                }
-            ],
+            type: 'string',
+            maxLength: 128,
+            minLength: 8,
             title: 'Password'
         }
     },
     type: 'object',
+    required: ['email', 'password'],
     title: 'UserUpdate'
 } as const;
 
@@ -485,20 +476,14 @@ export const UserUpdateMeSchema = {
             title: 'Full Name'
         },
         email: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 255,
-                    format: 'email'
-                },
-                {
-                    type: 'null'
-                }
-            ],
+            type: 'string',
+            maxLength: 255,
+            format: 'email',
             title: 'Email'
         }
     },
     type: 'object',
+    required: ['email'],
     title: 'UserUpdateMe'
 } as const;
 

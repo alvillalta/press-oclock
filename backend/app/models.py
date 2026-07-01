@@ -187,12 +187,12 @@ class Question(QuestionCreate, table=True):
 class Message(SQLModel):
     message: str
 
-
+""" 
 # Login request payload
 class LoginRequest(SQLModel):
     email: EmailStr
     password: str
-
+ """
 
 # JSON payload containing access token
 class Token(SQLModel):
