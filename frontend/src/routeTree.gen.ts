@@ -18,6 +18,8 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutItemsIndexRouteImport } from './routes/_layout/items.index'
+import { Route as LayoutItemsMailIdRouteImport } from './routes/_layout/items.$mailId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -63,6 +65,16 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutItemsIndexRoute = LayoutItemsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LayoutItemsRoute,
+} as any)
+const LayoutItemsMailIdRoute = LayoutItemsMailIdRouteImport.update({
+  id: '/$mailId',
+  path: '/$mailId',
+  getParentRoute: () => LayoutItemsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
@@ -71,8 +83,10 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
+  '/items': typeof LayoutItemsRouteWithChildren
   '/settings': typeof LayoutSettingsRoute
+  '/items/$mailId': typeof LayoutItemsMailIdRoute
+  '/items/': typeof LayoutItemsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -80,9 +94,10 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
+  '/items/$mailId': typeof LayoutItemsMailIdRoute
+  '/items': typeof LayoutItemsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -92,9 +107,11 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
-  '/_layout/items': typeof LayoutItemsRoute
+  '/_layout/items': typeof LayoutItemsRouteWithChildren
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/items/$mailId': typeof LayoutItemsMailIdRoute
+  '/_layout/items/': typeof LayoutItemsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +124,8 @@ export interface FileRouteTypes {
     | '/admin'
     | '/items'
     | '/settings'
+    | '/items/$mailId'
+    | '/items/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -114,9 +133,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/items'
     | '/settings'
     | '/'
+    | '/items/$mailId'
+    | '/items'
   id:
     | '__root__'
     | '/_layout'
@@ -128,6 +148,8 @@ export interface FileRouteTypes {
     | '/_layout/items'
     | '/_layout/settings'
     | '/_layout/'
+    | '/_layout/items/$mailId'
+    | '/_layout/items/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -203,19 +225,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/items/': {
+      id: '/_layout/items/'
+      path: '/'
+      fullPath: '/items/'
+      preLoaderRoute: typeof LayoutItemsIndexRouteImport
+      parentRoute: typeof LayoutItemsRoute
+    }
+    '/_layout/items/$mailId': {
+      id: '/_layout/items/$mailId'
+      path: '/$mailId'
+      fullPath: '/items/$mailId'
+      preLoaderRoute: typeof LayoutItemsMailIdRouteImport
+      parentRoute: typeof LayoutItemsRoute
+    }
   }
 }
 
+interface LayoutItemsRouteChildren {
+  LayoutItemsMailIdRoute: typeof LayoutItemsMailIdRoute
+  LayoutItemsIndexRoute: typeof LayoutItemsIndexRoute
+}
+
+const LayoutItemsRouteChildren: LayoutItemsRouteChildren = {
+  LayoutItemsMailIdRoute: LayoutItemsMailIdRoute,
+  LayoutItemsIndexRoute: LayoutItemsIndexRoute,
+}
+
+const LayoutItemsRouteWithChildren = LayoutItemsRoute._addFileChildren(
+  LayoutItemsRouteChildren,
+)
+
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
-  LayoutItemsRoute: typeof LayoutItemsRoute
+  LayoutItemsRoute: typeof LayoutItemsRouteWithChildren
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
-  LayoutItemsRoute: LayoutItemsRoute,
+  LayoutItemsRoute: LayoutItemsRouteWithChildren,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }

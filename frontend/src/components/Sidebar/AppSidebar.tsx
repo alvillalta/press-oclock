@@ -1,4 +1,4 @@
-import { Briefcase, Home, Users } from "lucide-react"
+import { Mail, Search, Users } from "lucide-react"
 
 import { SidebarAppearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
@@ -10,11 +10,12 @@ import {
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
 import { type Item, Main } from "./Main"
+import RecentQuestions from "./RecentQuestions"
 import { User } from "./User"
 
 const baseItems: Item[] = [
-  { icon: Home, title: "Dashboard", path: "/" },
-  { icon: Briefcase, title: "Items", path: "/items" },
+  { icon: Search, title: "Nueva búsqueda", path: "/" },
+  { icon: Mail, title: "Correos", path: "/items" },
 ]
 
 export function AppSidebar() {
@@ -31,6 +32,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <Main items={items} />
+        <RecentQuestions />
       </SidebarContent>
       <SidebarFooter>
         <SidebarAppearance />

@@ -1,142 +1,56 @@
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Pencil } from "lucide-react"
+import { Eye } from "lucide-react"
 import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
 
-import { type ItemPublic, ItemsService } from "@/client"
-import { Button } from "@/components/ui/button"
+import type { Mail } from "@/client"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { LoadingButton } from "@/components/ui/loading-button"
-import useCustomToast from "@/hooks/useCustomToast"
-import { handleError } from "@/utils"
-
-const formSchema = z.object({
-  title: z.string().min(1, { message: "Title is required" }),
-  description: z.string().optional(),
-})
-
-type FormData = z.infer<typeof formSchema>
 
 interface EditItemProps {
-  item: ItemPublic
+  item: Mail
   onSuccess: () => void
 }
 
 const EditItem = ({ item, onSuccess }: EditItemProps) => {
   const [isOpen, setIsOpen] = useState(false)
-  const queryClient = useQueryClient()
-  const { showSuccessToast, showErrorToast } = useCustomToast()
-
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    mode: "onBlur",
-    criteriaMode: "all",
-    defaultValues: {
-      title: item.title,
-      description: item.description ?? undefined,
-    },
-  })
-
-  const mutation = useMutation({
-    mutationFn: (data: FormData) =>
-      ItemsService.updateItem({ id: item.id, requestBody: data }),
-    onSuccess: () => {
-      showSuccessToast("Item updated successfully")
-      setIsOpen(false)
+  const handleOpenChange = (nextOpen: boolean) => {
+    setIsOpen(nextOpen)
+    if (!nextOpen) {
       onSuccess()
-    },
-    onError: handleError.bind(showErrorToast),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["items"] })
-    },
-  })
-
-  const onSubmit = (data: FormData) => {
-    mutation.mutate(data)
+    }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuItem
         onSelect={(e) => e.preventDefault()}
         onClick={() => setIsOpen(true)}
       >
-        <Pencil />
-        Edit Item
+        <Eye />
+        View Mail
       </DropdownMenuItem>
       <DialogContent className="sm:max-w-md">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>Edit Item</DialogTitle>
-              <DialogDescription>
-                Update the item details below.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Title <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder="Title" type="text" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Description" type="text" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline" disabled={mutation.isPending}>
-                  Cancel
-                </Button>
-              </DialogClose>
-              <LoadingButton type="submit" loading={mutation.isPending}>
-                Save
-              </LoadingButton>
-            </DialogFooter>
-          </form>
-        </Form>
+        <DialogHeader>
+          <DialogTitle>Mail Details</DialogTitle>
+          <DialogDescription>Review sender, subject and date.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 py-2 text-sm">
+          <p>
+            <span className="font-medium">Sender:</span> {item.sender}
+          </p>
+          <p>
+            <span className="font-medium">Subject:</span> {item.subject ?? "N/A"}
+          </p>
+          <p>
+            <span className="font-medium">Date:</span>{" "}
+            {new Date(item.date).toLocaleString()}
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   )

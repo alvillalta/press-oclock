@@ -101,6 +101,13 @@ class Mail(MailBase, table=True):
     chunks: list["Chunk"] = Relationship(back_populates="mail", cascade_delete=True)
 
 
+class MailResponse(MailBase):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+    body: str | None = None
+    
+
 # Chunk shared properties
 class ChunkBase(SQLModel):
     chunk_text: str = Field(

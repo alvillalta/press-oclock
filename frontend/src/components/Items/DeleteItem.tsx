@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 
-import { ItemsService } from "@/client"
+import { MailsService } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -20,7 +20,7 @@ import useCustomToast from "@/hooks/useCustomToast"
 import { handleError } from "@/utils"
 
 interface DeleteItemProps {
-  id: string
+  id?: string
   onSuccess: () => void
 }
 
@@ -30,24 +30,25 @@ const DeleteItem = ({ id, onSuccess }: DeleteItemProps) => {
   const { showSuccessToast, showErrorToast } = useCustomToast()
   const { handleSubmit } = useForm()
 
-  const deleteItem = async (id: string) => {
-    await ItemsService.deleteItem({ id: id })
+  const deleteItem = async (mailId: string) => {
+    await MailsService.deleteMail({ id: mailId })
   }
 
   const mutation = useMutation({
     mutationFn: deleteItem,
     onSuccess: () => {
-      showSuccessToast("The item was deleted successfully")
+      showSuccessToast("The mail was deleted successfully")
       setIsOpen(false)
       onSuccess()
     },
     onError: handleError.bind(showErrorToast),
     onSettled: () => {
-      queryClient.invalidateQueries()
+      queryClient.invalidateQueries({ queryKey: ["mails"] })
     },
   })
 
   const onSubmit = async () => {
+    if (!id) return
     mutation.mutate(id)
   }
 
@@ -56,17 +57,18 @@ const DeleteItem = ({ id, onSuccess }: DeleteItemProps) => {
       <DropdownMenuItem
         variant="destructive"
         onSelect={(e) => e.preventDefault()}
+        disabled={!id}
         onClick={() => setIsOpen(true)}
       >
         <Trash2 />
-        Delete Item
+        Delete Mail
       </DropdownMenuItem>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogHeader>
-            <DialogTitle>Delete Item</DialogTitle>
+            <DialogTitle>Delete Mail</DialogTitle>
             <DialogDescription>
-              This item will be permanently deleted. Are you sure? You will not
+              This mail will be permanently deleted. Are you sure? You will not
               be able to undo this action.
             </DialogDescription>
           </DialogHeader>
