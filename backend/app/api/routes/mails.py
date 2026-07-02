@@ -6,7 +6,7 @@ from sqlmodel import col, func, select
 
 from app.api.deps import CurrentUser, MakeApiKeyDep, SessionDep
 from app.core.config import settings
-from app.models import Mail, MailData, Message
+from app.models import Chunk, Mail, MailData, MailResponse, Message
 from app.services.mail_service import MailService
 from app.core.logging import get_logger
 
@@ -47,7 +47,7 @@ def read_mails(
     return mails
 
 
-@router.get("/{id}", response_model=Mail)
+@router.get("/{id}", response_model=MailResponse)
 def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Mail:
     """
     Get mail by ID.
@@ -57,7 +57,17 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
         raise HTTPException(status_code=404, detail="Mail not found")
     if (mail.user_id != current_user.id) and (not current_user.is_superuser):
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    return mail
+    
+    chunks_statement = (
+        select(Chunk.chunk_text)
+        .where(Chunk.mail_id == mail.id)
+        .order_by(col(Chunk.chunk_index).asc())
+    )
+    chunk_texts = session.exec(chunks_statement).all()
+
+    body = "".join(chunk_texts) if chunk_texts else None
+
+    return MailResponse.model_validate(mail, update={"body": body})
 
 
 @router.post("/", response_model=Mail)

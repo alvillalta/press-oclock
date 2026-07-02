@@ -101,6 +101,13 @@ class Mail(MailBase, table=True):
     chunks: list["Chunk"] = Relationship(back_populates="mail", cascade_delete=True)
 
 
+class MailResponse(MailBase):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+    body: str | None = None
+    
+
 # Chunk shared properties
 class ChunkBase(SQLModel):
     chunk_text: str = Field(
@@ -187,12 +194,12 @@ class Question(QuestionCreate, table=True):
 class Message(SQLModel):
     message: str
 
-
+""" 
 # Login request payload
 class LoginRequest(SQLModel):
     email: EmailStr
     password: str
-
+ """
 
 # JSON payload containing access token
 class Token(SQLModel):

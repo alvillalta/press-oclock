@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
-import { type ItemCreate, ItemsService } from "@/client"
+import { type MailData, MailsService } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -31,8 +31,10 @@ import useCustomToast from "@/hooks/useCustomToast"
 import { handleError } from "@/utils"
 
 const formSchema = z.object({
-  title: z.string().min(1, { message: "Title is required" }),
-  description: z.string().optional(),
+  sender: z.string().email({ message: "A valid sender email is required" }),
+  date: z.string().min(1, { message: "Date is required" }),
+  subject: z.string().optional(),
+  body: z.string().optional(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -47,27 +49,33 @@ const AddItem = () => {
     mode: "onBlur",
     criteriaMode: "all",
     defaultValues: {
-      title: "",
-      description: "",
+      sender: "",
+      date: "",
+      subject: "",
+      body: "",
     },
   })
 
   const mutation = useMutation({
-    mutationFn: (data: ItemCreate) =>
-      ItemsService.createItem({ requestBody: data }),
+    mutationFn: (data: MailData) => MailsService.ingestMail({ requestBody: data }),
     onSuccess: () => {
-      showSuccessToast("Item created successfully")
+      showSuccessToast("Mail ingested successfully")
       form.reset()
       setIsOpen(false)
     },
     onError: handleError.bind(showErrorToast),
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["items"] })
+      queryClient.invalidateQueries({ queryKey: ["mails"] })
     },
   })
 
   const onSubmit = (data: FormData) => {
-    mutation.mutate(data)
+    mutation.mutate({
+      sender: data.sender,
+      date: new Date(data.date).toISOString(),
+      subject: data.subject,
+      body: data.body,
+    })
   }
 
   return (
@@ -75,14 +83,14 @@ const AddItem = () => {
       <DialogTrigger asChild>
         <Button className="my-4">
           <Plus className="mr-2" />
-          Add Item
+          Add Mail
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Item</DialogTitle>
+          <DialogTitle>Add Mail</DialogTitle>
           <DialogDescription>
-            Fill in the details to add a new item.
+            Fill in sender, subject, date and body to ingest a new mail.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -90,16 +98,16 @@ const AddItem = () => {
             <div className="grid gap-4 py-4">
               <FormField
                 control={form.control}
-                name="title"
+                name="sender"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Title <span className="text-destructive">*</span>
+                      Sender <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Title"
-                        type="text"
+                        placeholder="sender@example.com"
+                        type="email"
                         {...field}
                         required
                       />
@@ -111,17 +119,48 @@ const AddItem = () => {
 
               <FormField
                 control={form.control}
-                name="description"
+                name="date"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>
+                      Date <span className="text-destructive">*</span>
+                    </FormLabel>
                     <FormControl>
-                      <Input placeholder="Description" type="text" {...field} />
+                      <Input type="datetime-local" {...field} required />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subject</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Mail subject" type="text" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="body"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Body</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Mail body" type="text" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
             </div>
 
             <DialogFooter>

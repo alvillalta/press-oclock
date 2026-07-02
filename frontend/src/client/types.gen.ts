@@ -13,27 +13,20 @@ export type HTTPValidationError = {
     detail?: Array<ValidationError>;
 };
 
-export type ItemCreate = {
-    title: string;
-    description?: (string | null);
+export type Mail = {
+    subject?: (string | null);
+    sender: string;
+    date: string;
+    id?: string;
+    user_id: string;
+    created_at?: string;
 };
 
-export type ItemPublic = {
-    title: string;
-    description?: (string | null);
-    id: string;
-    owner_id: string;
-    created_at?: (string | null);
-};
-
-export type ItemsPublic = {
-    data: Array<ItemPublic>;
-    count: number;
-};
-
-export type ItemUpdate = {
-    title?: (string | null);
-    description?: (string | null);
+export type MailData = {
+    subject?: (string | null);
+    sender: string;
+    date: string;
+    body?: (string | null);
 };
 
 export type Message = {
@@ -50,6 +43,17 @@ export type PrivateUserCreate = {
     password: string;
     full_name: string;
     is_verified?: boolean;
+};
+
+export type Question = {
+    question: string;
+    answer: string;
+    sources?: Array<{
+        [key: string]: unknown;
+    }>;
+    id?: string;
+    user_id: string;
+    created_at?: string;
 };
 
 export type Token = {
@@ -91,16 +95,16 @@ export type UsersPublic = {
 };
 
 export type UserUpdate = {
-    email?: (string | null);
+    email: string;
     is_active?: boolean;
     is_superuser?: boolean;
     full_name?: (string | null);
-    password?: (string | null);
+    password: string;
 };
 
 export type UserUpdateMe = {
     full_name?: (string | null);
-    email?: (string | null);
+    email: string;
 };
 
 export type ValidationError = {
@@ -112,38 +116,6 @@ export type ValidationError = {
         [key: string]: unknown;
     };
 };
-
-export type ItemsReadItemsData = {
-    limit?: number;
-    skip?: number;
-};
-
-export type ItemsReadItemsResponse = (ItemsPublic);
-
-export type ItemsCreateItemData = {
-    requestBody: ItemCreate;
-};
-
-export type ItemsCreateItemResponse = (ItemPublic);
-
-export type ItemsReadItemData = {
-    id: string;
-};
-
-export type ItemsReadItemResponse = (ItemPublic);
-
-export type ItemsUpdateItemData = {
-    id: string;
-    requestBody: ItemUpdate;
-};
-
-export type ItemsUpdateItemResponse = (ItemPublic);
-
-export type ItemsDeleteItemData = {
-    id: string;
-};
-
-export type ItemsDeleteItemResponse = (Message);
 
 export type LoginLoginAccessTokenData = {
     formData: Body_login_login_access_token;
@@ -171,11 +143,61 @@ export type LoginRecoverPasswordHtmlContentData = {
 
 export type LoginRecoverPasswordHtmlContentResponse = (string);
 
+export type MailsReadMailsData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type MailsReadMailsResponse = (Array<Mail>);
+
+export type MailsIngestMailData = {
+    requestBody: MailData;
+};
+
+export type MailsIngestMailResponse = (Mail);
+
+export type MailsReadMailData = {
+    id: string;
+};
+
+export type MailsReadMailResponse = (Mail);
+
+export type MailsDeleteMailData = {
+    id: string;
+};
+
+export type MailsDeleteMailResponse = (Message);
+
 export type PrivateCreateUserData = {
     requestBody: PrivateUserCreate;
 };
 
 export type PrivateCreateUserResponse = (UserPublic);
+
+export type QuestionsReadQuestionsData = {
+    limit?: number;
+    skip?: number;
+};
+
+export type QuestionsReadQuestionsResponse = (Array<Question>);
+
+export type QuestionsCreateQuestionData = {
+    questionIn: string;
+};
+
+export type QuestionsCreateQuestionResponse = (Question);
+
+export type QuestionsReadQuestionData = {
+    id: string;
+};
+
+export type QuestionsReadQuestionResponse = (Question);
+
+export type QuestionsDeleteQuestionData = {
+    id: string;
+};
+
+export type QuestionsDeleteQuestionResponse = (Message);
 
 export type UsersReadUsersData = {
     limit?: number;

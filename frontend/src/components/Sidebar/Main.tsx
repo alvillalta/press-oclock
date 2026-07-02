@@ -25,7 +25,11 @@ export function Main({ items }: MainProps) {
   const router = useRouterState()
   const currentPath = router.location.pathname
 
-  const handleMenuClick = () => {
+  const handleMenuClick = (path: string) => {
+    if (path === "/") {
+      window.dispatchEvent(new Event("dashboard-reset"))
+    }
+
     if (isMobile) {
       setOpenMobile(false)
     }
@@ -45,7 +49,7 @@ export function Main({ items }: MainProps) {
                   isActive={isActive}
                   asChild
                 >
-                  <RouterLink to={item.path} onClick={handleMenuClick}>
+                  <RouterLink to={item.path} onClick={() => handleMenuClick(item.path)}>
                     <item.icon />
                     <span>{item.title}</span>
                   </RouterLink>

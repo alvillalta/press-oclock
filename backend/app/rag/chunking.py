@@ -5,8 +5,6 @@ def chunk_text(text: str, chunk_size, overlap) -> List[ChunkBase] | None:
     """
     Descompone un texto en chunks con solapamiento.
     """
-    if not text or len(text) == 0:
-        return None
     
     chunks = []
     start = 0
