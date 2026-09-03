@@ -9,8 +9,6 @@ export const Route = createRootRoute({
     <>
       <HeadContent />
       <Outlet />
-      <TanStackRouterDevtools position="bottom-right" />
-      <ReactQueryDevtools initialIsOpen={false} />
     </>
   ),
   notFoundComponent: () => <NotFound />,

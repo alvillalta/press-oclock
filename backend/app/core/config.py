@@ -133,3 +133,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()  # type: ignore
+print("DATABASE:", settings.SQLALCHEMY_DATABASE_URI)
