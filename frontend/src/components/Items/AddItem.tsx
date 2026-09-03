@@ -83,12 +83,12 @@ const AddItem = () => {
       <DialogTrigger asChild>
         <Button className="my-4">
           <Plus className="mr-2" />
-          Add Mail
+          Añadir correo
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Mail</DialogTitle>
+          <DialogTitle>Añadir correo</DialogTitle>
           <DialogDescription>
             Fill in sender, subject, date and body to ingest a new mail.
           </DialogDescription>
