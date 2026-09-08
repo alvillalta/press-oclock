@@ -1,240 +1,501 @@
-# Full Stack FastAPI Template
+# Press O'Clock
 
-<a href="https://github.com/fastapi/full-stack-fastapi-template/actions?query=workflow%3A%22Test+Docker+Compose%22" target="_blank"><img src="https://github.com/fastapi/full-stack-fastapi-template/workflows/Test%20Docker%20Compose/badge.svg" alt="Test Docker Compose"></a>
-<a href="https://github.com/fastapi/full-stack-fastapi-template/actions?query=workflow%3A%22Test+Backend%22" target="_blank"><img src="https://github.com/fastapi/full-stack-fastapi-template/workflows/Test%20Backend/badge.svg" alt="Test Backend"></a>
-<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/fastapi/full-stack-fastapi-template" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/fastapi/full-stack-fastapi-template.svg" alt="Coverage"></a>
+**Press O'Clock** is a RAG-based conversational assistant for journalists that centralizes press releases received via email, enabling natural language queries. Built as a full-stack application, it combines a **FastAPI** backend with a **React + TypeScript** frontend.
 
-## Technology Stack and Features
+This project is based on the [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template).
 
-- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
-  - 🧰 [SQLModel](https://sqlmodel.tiangolo.com) for the Python SQL database interactions (ORM).
-  - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
-  - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
-- 🚀 [React](https://react.dev) for the frontend.
-  - 💃 Using TypeScript, hooks, [Vite](https://vitejs.dev), and other parts of a modern frontend stack.
-  - 🎨 [Tailwind CSS](https://tailwindcss.com) and [shadcn/ui](https://ui.shadcn.com) for the frontend components.
-  - 🤖 An automatically generated frontend client.
-  - 🧪 [Playwright](https://playwright.dev) for End-to-End testing.
-  - 🦇 Dark mode support.
-- 🐋 [Docker Compose](https://www.docker.com) for development and production.
-- 🔒 Secure password hashing by default.
-- 🔑 JWT (JSON Web Token) authentication.
-- 📫 Email based password recovery.
-- 📬 [Mailcatcher](https://mailcatcher.me) for local email testing during development.
-- ✅ Tests with [Pytest](https://pytest.org).
-- 📞 [Traefik](https://traefik.io) as a reverse proxy / load balancer.
-- 🚢 Deployment instructions using Docker Compose, including how to set up a frontend Traefik proxy to handle automatic HTTPS certificates.
-- 🏭 CI (continuous integration) and CD (continuous deployment) based on GitHub Actions.
+## Index
 
-### Dashboard Login
+- [Demo](#demo)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Environment Configuration](#environment-configuration)
+- [Execution](#execution)
 
-[![API docs](img/login.png)](https://github.com/fastapi/full-stack-fastapi-template)
+---
 
-### Dashboard - Admin
+## Demo
 
-[![API docs](img/dashboard.png)](https://github.com/fastapi/full-stack-fastapi-template)
+This demo shows the main **Press O'clock** application behavior.
 
-### Dashboard - Items
+### Preview
 
-[![API docs](img/dashboard-items.png)](https://github.com/fastapi/full-stack-fastapi-template)
+![Navigation](readme-images/press-oclock.gif)
 
-### Dashboard - Dark Mode
+### Key Screens
 
-[![API docs](img/dashboard-dark.png)](https://github.com/fastapi/full-stack-fastapi-template)
+| Login |
+|------|
+|![Login](readme-images/1.png)|
 
-### Interactive API Documentation
+| Main Dashboard  | Webhook | Inbox |
+|------|-------------------|-----------|
+| ![Main Dashboard](readme-images/2.png) | ![Webhook](readme-images/3.png) | ![Inbox](readme-images/4.png) |
 
-[![API docs](img/docs.png)](https://github.com/fastapi/full-stack-fastapi-template)
+| Query | Answer + Sources | Quoted Mail |
+|------|-------------------|-----------|
+| ![Query](readme-images/5.png) | ![Answer + Sources](readme-images/6.png) | ![Quoted Mail](readme-images/7.png) |
 
-## How To Use It
+---
 
-You can **just fork or clone** this repository and use it as is.
+## Features
 
-✨ It just works. ✨
+### Core Features
 
-### How to Use a Private Repository
+- **RAG-based conversational search** - Leverages OpenAI embeddings and pgvector for intelligent similarity search over press releases
+- **Optimized context retrieval** - Expands retrieved context with contiguous chunks for better LLM responses
+- **Source traceability** - Every response links back to original sources, including text excerpts and email metadata
+- **Automated email ingestion** - Make.com webhook integration decouples email capture from internal processing
+- **Natural language queries** - Ask questions about your press releases in plain English
 
-If you want to have a private repository, GitHub won't allow you to simply fork it as it doesn't allow changing the visibility of forks.
+### Technology Stack Features
 
-But you can do the following:
+- **Full-stack TypeScript support** with shared types across backend and frontend
+- **FastAPI backend** with SQLModel ORM to Supabase for type-safe database operations
+- **React + Vite** frontend with modern development experience and hot module replacement
+- **JWT authentication** with secure password hashing (Bcrypt)
+- **Email-based password recovery** with Mailcatcher for local development
+- **Automated API client generation** using OpenAPI/TypeScript codegen
+- **Docker Compose** setup for reproducible development and production deployments
+- **Traefik reverse proxy** for load balancing and HTTPS termination
+- **Comprehensive testing** with Pytest (backend) and Playwright (E2E)
+- **Database migrations** using Alembic
+- **CI/CD automation** with GitHub Actions
+- **Dark mode support** with Tailwind CSS
+- **Pre-configured development tools** with linting, formatting, and type checking
 
-- Create a new GitHub repo, for example `my-full-stack`.
-- Clone this repository manually, set the name with the name of the project you want to use, for example `my-full-stack`:
+---
 
-```bash
-git clone git@github.com:fastapi/full-stack-fastapi-template.git my-full-stack
+## Tech Stack
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| **Backend Framework** | FastAPI | ≥0.128.0 |
+| **Runtime** | Python | ≥3.12 |
+| **Async Server** | Uvicorn | ≥0.40.0 |
+| **ORM** | SQLModel | Latest |
+| **Data Validation** | Pydantic | ≥2.12.5 |
+| **Database** | PostgreSQL | Latest |
+| **Frontend Framework** | React | Latest |
+| **Build Tool** | Vite | Latest |
+| **Language** | TypeScript | Latest |
+| **Styling** | Tailwind CSS | Latest |
+| **Components** | shadcn/ui | Latest |
+| **E2E Testing** | Playwright | Latest |
+| **Backend Testing** | Pytest | Latest |
+| **Database Migrations** | Alembic | Latest |
+| **Authentication** | JWT + Bcrypt | Latest |
+| **Reverse Proxy** | Traefik | Latest |
+| **Containerization** | Docker, Docker Compose | Latest |
+
+---
+
+## Project Structure
+
+```
+press-oclock/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                 # FastAPI application entry point
+│   │   ├── crud.py                 # Create, Read, Update, Delete operations
+│   │   ├── models.py               # SQLModel database models
+│   │   ├── initial_data.py         # Database seeding logic
+│   │   ├── utils.py                # Utility functions
+│   │   │
+│   │   ├── api/
+│   │   │   ├── main.py             # Main API router
+│   │   │   ├── deps.py             # Dependency injection
+│   │   │   └── routes/             # Endpoint routes (items, users, etc.)
+│   │   │
+│   │   ├── core/
+│   │   │   ├── db.py               # Database connection & session management
+│   │   │   ├── logging.py          # Structured logging configuration
+│   │   │   ├── security.py         # JWT authentication & password hashing
+│   │   │   └── openai_client.py    # Optional: External API integrations
+│   │   │
+│   │   ├── services/
+│   │   │   ├── mail_service.py     # Email sending service
+│   │   │   ├── rag_service.py      # RAG (Retrieval-Augmented Generation)
+│   │   │   └── sync_service.py     # Data synchronization
+│   │   │
+│   │   ├── integrations/
+│   │   │   ├── email_provider.py   # Email provider abstraction
+│   │   │   └── gmail_provider.py   # Gmail-specific implementation
+│   │   │
+│   │   ├── rag/
+│   │   │   ├── chunking.py         # Text chunking for embeddings
+│   │   │   ├── embeddings.py       # Embedding generation
+│   │   │   ├── generation.py       # Generation logic
+│   │   │   ├── retrieval_augmentation.py
+│   │   │   └── sources.py          # Data source management
+│   │   │
+│   │   ├── email-templates/
+│   │   │   ├── src/                # Email template source files
+│   │   │   └── build/              # Compiled email templates
+│   │   │
+│   │   ├── alembic/                # Database migration scripts
+│   │   │   ├── env.py
+│   │   │   ├── versions/
+│   │   │   └── script.py.mako
+│   │   │
+│   │   └── tests/                  # Backend tests
+│   │       ├── api/
+│   │       ├── crud/
+│   │       ├── utils/
+│   │       ├── conftest.py         # Pytest configuration & fixtures
+│   │       └── scripts/
+│   │
+│   ├── scripts/
+│   │   ├── format.sh               # Code formatting script
+│   │   ├── lint.sh                 # Linting script
+│   │   ├── test.sh                 # Run tests
+│   │   ├── prestart.sh             # Pre-startup setup
+│   │   └── tests-start.sh          # Start tests in docker
+│   │
+│   ├── Dockerfile                  # Container image for backend
+│   ├── pyproject.toml              # Python project configuration
+│   ├── alembic.ini                 # Alembic configuration
+│   └── README.md
+│
+├── frontend/
+│   ├── src/
+│   │   ├── main.tsx                # React entry point
+│   │   ├── index.css               # Global styles
+│   │   ├── utils.ts                # Utility functions
+│   │   ├── routeTree.gen.ts        # Generated route definitions
+│   │   ├── vite-env.d.ts           # Vite environment types
+│   │   │
+│   │   ├── client/
+│   │   │   └── index.ts            # Auto-generated API client
+│   │   │
+│   │   ├── components/             # Reusable React components
+│   │   │
+│   │   ├── routes/                 # Route-based components
+│   │   │
+│   │   ├── hooks/                  # Custom React hooks
+│   │   │
+│   │   └── lib/                    # Shared utilities & helpers
+│   │
+│   ├── public/                     # Static assets
+│   │   └── assets/
+│   │       └── images/
+│   │
+│   ├── tests/
+│   │   ├── admin.spec.ts           # Admin feature tests
+│   │   ├── auth.setup.ts           # Authentication setup
+│   │   ├── login.spec.ts           # Login tests
+│   │   ├── sign-up.spec.ts         # Sign-up tests
+│   │   ├── items.spec.ts           # Items feature tests
+│   │   ├── user-settings.spec.ts   # User settings tests
+│   │   ├── reset-password.spec.ts  # Password reset tests
+│   │   ├── config.ts               # Test configuration
+│   │   └── utils/                  # Test utilities
+│   │
+│   ├── Dockerfile                  # Container image for frontend
+│   ├── Dockerfile.playwright       # Playwright-specific container
+│   ├── vite.config.ts              # Vite configuration
+│   ├── tsconfig.json               # TypeScript configuration
+│   ├── playwright.config.ts        # Playwright configuration
+│   ├── openapi-ts.config.ts        # OpenAPI code generation config
+│   ├── biome.json                  # Code formatter configuration
+│   ├── nginx.conf                  # Nginx configuration
+│   ├── package.json
+│   └── README.md
+│
+├── alembic/                        # Root-level migrations (if applicable)
+│   ├── env.py
+│   ├── versions/
+│   └── script.py.mako
+│
+├── scripts/
+│   ├── test-local.sh               # Local testing script
+│   ├── test.sh                     # Docker testing script
+│   └── generate-client.sh          # Generate TypeScript client
+│
+├── docker-compose.yml              # Main compose configuration
+├── compose.yml                     # Alternative compose
+├── compose.override.yml            # Local development overrides
+├── compose.traefik.yml             # Traefik configuration
+│
+├── pyproject.toml                  # Root project configuration
+├── package.json                    # Root Node.js configuration
+├── copier.yml                      # Project template configuration
+├── alembic.ini                     # Root Alembic configuration
+│
+├── deployment.md                   # Deployment guide
+├── development.md                  # Development guide
+├── CONTRIBUTING.md                 # Contribution guidelines
+├── LICENSE
+└── README.md
+
 ```
 
-- Enter into the new directory:
+---
+
+## Installation
+
+### Prerequisites
+
+- **Python 3.12+**
+- **Node.js 18+** (for frontend)
+- **pip** or **uv** package manager
+- **Git** (for cloning the repository)
+- **ngrok** (optional - required for Make.com webhook integrations during development)
+
+### Option 1: Using pip + npm
 
 ```bash
-cd my-full-stack
+# Clone the repository
+git clone https://github.com/yourusername/press-oclock.git
+cd press-oclock
+
+# Setup Backend
+cd backend
+python -m venv .venv
+
+# On Windows:
+.venv\Scripts\activate
+# On macOS/Linux:
+source .venv/bin/activate
+
+# Install backend dependencies
+pip install -e .
+pip install -e ".[dev]"
+
+# Return to root
+cd ..
+
+# Setup Frontend
+cd frontend
+npm install
+cd ..
 ```
 
-- Set the new origin to your new repository, copy it from the GitHub interface, for example:
+### Option 2: Using uv + pnpm
 
 ```bash
-git remote set-url origin git@github.com:octocat/my-full-stack.git
+# Install uv (one-time)
+# Windows:
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+# macOS/Linux:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and navigate
+git clone https://github.com/yourusername/press-oclock.git
+cd press-oclock
+
+# Backend setup
+cd backend
+uv sync
+cd ..
+
+# Frontend setup
+cd frontend
+npm install  # or pnpm install
+cd ..
 ```
 
-- Add this repo as another "remote" to allow you to get updates later:
+### Option 3: Using Docker Compose (Recommended for Development)
 
 ```bash
-git remote add upstream git@github.com:fastapi/full-stack-fastapi-template.git
+# Clone the repository
+git clone https://github.com/yourusername/press-oclock.git
+cd press-oclock
+
+# Build and run all services
+docker-compose up --build
+
+# Services will be accessible at:
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000
+# API Documentation: http://localhost:8000/docs
+# Traefik Dashboard: http://localhost:8080
 ```
 
-- Push the code to your new repository:
+---
+
+## Environment Configuration
+
+### 1. Backend Setup
+
+Navigate to `backend/` and create a `.env` file based on the template:
+
+```env
+# Database Configuration
+POSTGRES_SERVER=db
+POSTGRES_PORT=5432
+POSTGRES_DB=app
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=changeme
+DATABASE_URL=postgresql://postgres:changeme@localhost/app
+
+# FastAPI Configuration
+APP_NAME=Press O'Clock
+APP_VERSION=0.1.0
+DEBUG=true
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
+
+# JWT Configuration
+JWT_SECRET_KEY=your-super-secret-key-change-this
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=30
+
+# CORS Configuration
+CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
+CORS_ALLOW_CREDENTIALS=true
+CORS_ALLOW_METHODS=["*"]
+CORS_ALLOW_HEADERS=["*"]
+
+# Logging Configuration
+LOG_LEVEL=INFO
+
+# Email Configuration (for password recovery)
+SMTP_HOST=localhost
+SMTP_PORT=1025  # Mailcatcher port
+SMTP_USER=
+SMTP_PASSWORD=
+EMAILS_FROM_EMAIL=noreply@example.com
+EMAILS_FROM_NAME=Press O'Clock
+
+# Backend URL (for frontend)
+BACKEND_URL=http://localhost:8000
+
+# Optional: External API Keys
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+### 2. Frontend Setup
+
+Navigate to `frontend/` and create a `.env` file:
+
+```env
+# Backend API URL
+VITE_API_URL=http://localhost:8000/api/v1
+```
+
+### 3. Update Docker Compose Variables
+
+Edit `compose.override.yml` for local development:
+
+```yaml
+services:
+  db:
+    environment:
+      - POSTGRES_PASSWORD=changeme
+
+  backend:
+    environment:
+      - DATABASE_URL=postgresql://postgres:changeme@db:5432/app
+      - JWT_SECRET_KEY=your-super-secret-key
+```
+
+---
+
+## Execution
+
+### Development Backend
 
 ```bash
-git push -u origin master
+# Navigate to backend
+cd backend
+
+# Activate virtual environment
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
+
+# Start development server with auto-reload
+python -m uvicorn app.main:app --reload --port 8000
+
+# Or using uv:
+uv run uvicorn app.main:app --reload
 ```
 
-### Update From the Original Template
+Backend API documentation will be at: **http://localhost:8000/docs**
 
-After cloning the repository, and after doing changes, you might want to get the latest changes from this original template.
+### Development with Make/Webhooks (ngrok)
 
-- Make sure you added the original repository as a remote, you can check it with:
+If your application uses **Make.com webhooks** or needs to receive external HTTP callbacks during development, you'll need to expose your local backend to the internet using `ngrok` in another terminal.
+
+#### Install ngrok
+
+**Windows (using Chocolatey):**
+```bash
+choco install ngrok
+```
+
+### Development Frontend
 
 ```bash
-git remote -v
+# Navigate to frontend
+cd frontend
 
-origin    git@github.com:octocat/my-full-stack.git (fetch)
-origin    git@github.com:octocat/my-full-stack.git (push)
-upstream    git@github.com:fastapi/full-stack-fastapi-template.git (fetch)
-upstream    git@github.com:fastapi/full-stack-fastapi-template.git (push)
+# Start development server
+npm run dev
+# or
+pnpm dev
+# or
+bun run dev
 ```
 
-- Pull the latest changes without merging:
+Frontend will be at: **http://localhost:5173**
+
+### Development with Docker Compose
 
 ```bash
-git pull --no-commit upstream master
+# Start all services with live reload
+docker-compose up
+
+# In another terminal, run migrations if needed
+docker-compose exec backend alembic upgrade head
+
+# Access services:
+# Frontend: http://localhost:5173
+# Backend: http://localhost:8000
+# Docs: http://localhost:8000/docs
+
+# Stop services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
 ```
 
-This will download the latest changes from this template without committing them, that way you can check everything is right before committing.
-
-- If there are conflicts, solve them in your editor.
-
-- Once you are done, commit the changes:
+### Production Deployment
 
 ```bash
-git merge --continue
+# Using the production compose configuration
+docker-compose -f compose.yml -f compose.traefik.yml up -d
+
+# With Traefik for SSL/HTTPS
+# Configure your domain in compose.traefik.yml
 ```
 
-### Configure
+---
 
-You can then update configs in the `.env` files to customize your configurations.
+## Contributing
 
-Before deploying it, make sure you change at least the values for:
+Contributions are welcome! Please follow these guidelines:
 
-- `SECRET_KEY`
-- `FIRST_SUPERUSER_PASSWORD`
-- `POSTGRES_PASSWORD`
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
 
-You can (and should) pass these as environment variables from secrets.
-
-Read the [deployment.md](./deployment.md) docs for more details.
-
-### Generate Secret Keys
-
-Some environment variables in the `.env` file have a default value of `changethis`.
-
-You have to change them with a secret key, to generate secret keys you can run the following command:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-Copy the content and use that as password / secret key. And run that again to generate another secure key.
-
-## How To Use It - Alternative With Copier
-
-This repository also supports generating a new project using [Copier](https://copier.readthedocs.io).
-
-It will copy all the files, ask you configuration questions, and update the `.env` files with your answers.
-
-### Install Copier
-
-You can install Copier with:
-
-```bash
-pip install copier
-```
-
-Or better, if you have [`pipx`](https://pipx.pypa.io/), you can run it with:
-
-```bash
-pipx install copier
-```
-
-**Note**: If you have `pipx`, installing copier is optional, you could run it directly.
-
-### Generate a Project With Copier
-
-Decide a name for your new project's directory, you will use it below. For example, `my-awesome-project`.
-
-Go to the directory that will be the parent of your project, and run the command with your project's name:
-
-```bash
-copier copy https://github.com/fastapi/full-stack-fastapi-template my-awesome-project --trust
-```
-
-If you have `pipx` and you didn't install `copier`, you can run it directly:
-
-```bash
-pipx run copier copy https://github.com/fastapi/full-stack-fastapi-template my-awesome-project --trust
-```
-
-**Note** the `--trust` option is necessary to be able to execute a [post-creation script](https://github.com/fastapi/full-stack-fastapi-template/blob/master/.copier/update_dotenv.py) that updates your `.env` files.
-
-### Input Variables
-
-Copier will ask you for some data, you might want to have at hand before generating the project.
-
-But don't worry, you can just update any of that in the `.env` files afterwards.
-
-The input variables, with their default values (some auto generated) are:
-
-- `project_name`: (default: `"FastAPI Project"`) The name of the project, shown to API users (in .env).
-- `stack_name`: (default: `"fastapi-project"`) The name of the stack used for Docker Compose labels and project name (no spaces, no periods) (in .env).
-- `secret_key`: (default: `"changethis"`) The secret key for the project, used for security, stored in .env, you can generate one with the method above.
-- `first_superuser`: (default: `"admin@example.com"`) The email of the first superuser (in .env).
-- `first_superuser_password`: (default: `"changethis"`) The password of the first superuser (in .env).
-- `smtp_host`: (default: "") The SMTP server host to send emails, you can set it later in .env.
-- `smtp_user`: (default: "") The SMTP server user to send emails, you can set it later in .env.
-- `smtp_password`: (default: "") The SMTP server password to send emails, you can set it later in .env.
-- `emails_from_email`: (default: `"info@example.com"`) The email account to send emails from, you can set it later in .env.
-- `postgres_password`: (default: `"changethis"`) The password for the PostgreSQL database, stored in .env, you can generate one with the method above.
-- `sentry_dsn`: (default: "") The DSN for Sentry, if you are using it, you can set it later in .env.
-
-## Backend Development
-
-Backend docs: [backend/README.md](./backend/README.md).
-
-### Run Backend
-
-- cd backend
-- uv sync
-- .venv\Scripts\Activate.ps1
-- python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-
-## Frontend Development
-
-Frontend docs: [frontend/README.md](./frontend/README.md).
-
-## Deployment
-
-Deployment docs: [deployment.md](./deployment.md).
-
-## Development
-
-General development docs: [development.md](./development.md).
-
-This includes using Docker Compose, custom local domains, `.env` configurations, etc.
-
-## Release Notes
-
-Check the file [release-notes.md](./release-notes.md).
+---
 
 ## License
 
-The Full Stack FastAPI Template is licensed under the terms of the MIT license.
+This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
+
+---
+
+**Press O'Clock**
