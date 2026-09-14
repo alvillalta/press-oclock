@@ -205,11 +205,6 @@ press-oclock/
 │   ├── package.json
 │   └── README.md
 │
-├── alembic/                        # Root-level migrations (if applicable)
-│   ├── env.py
-│   ├── versions/
-│   └── script.py.mako
-│
 ├── scripts/
 │   ├── test-local.sh               # Local testing script
 │   ├── test.sh                     # Docker testing script
@@ -223,7 +218,6 @@ press-oclock/
 ├── pyproject.toml                  # Root project configuration
 ├── package.json                    # Root Node.js configuration
 ├── copier.yml                      # Project template configuration
-├── alembic.ini                     # Root Alembic configuration
 │
 ├── deployment.md                   # Deployment guide
 ├── development.md                  # Development guide

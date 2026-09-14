@@ -96,11 +96,6 @@ class Settings(BaseSettings):
     @property
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
-    
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def supabase_enabled(self) -> bool:
-        return bool(self.SUPABASE_URL and self.SUPABASE_KEY)
 
     EMAIL_TEST_USER: EmailStr = "test@example.com"
     FIRST_SUPERUSER: EmailStr
@@ -133,4 +128,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()  # type: ignore
-print("DATABASE:", settings.SQLALCHEMY_DATABASE_URI)
