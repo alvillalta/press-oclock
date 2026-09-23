@@ -425,6 +425,8 @@ If your application uses **Make.com webhooks** or needs to receive external HTTP
 **Windows (using Chocolatey):**
 ```bash
 choco install ngrok
+# Run 
+ngrok http 8000
 ```
 
 ### Development Frontend
