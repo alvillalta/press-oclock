@@ -36,33 +36,33 @@ def retrieve_chunks(
     return list(results)
 
 
-ChunkIndexWindows: TypeAlias = List[
+ChunkPositionWindows: TypeAlias = List[
     tuple[
         UUID,  # MailId
-        int,  # StartChunkIndex
-        int,  # EndChunkIndex
+        int,  # StartChunkPosition
+        int,  # EndChunkPosition
     ]
 ]
 
 
 def merge_windows(
-    chunk_index_windows: ChunkIndexWindows,
-) -> ChunkIndexWindows:
+    chunk_position_windows: ChunkPositionWindows,
+) -> ChunkPositionWindows:
     """
     Fusiona ventanas solapadas para cada mail_id.
     """
-    if not chunk_index_windows:
+    if not chunk_position_windows:
         return []
 
     # Ordena por mail_id y start de la tupla para poder fusionar en una pasada
-    chunk_index_windows.sort(key=lambda window_key: (window_key[0], window_key[1]))
+    chunk_position_windows.sort(key=lambda window_key: (window_key[0], window_key[1]))
 
     merged_windows = []
     # Guarda el primer elemento de la lista para no compararlo consigo mismo a continuación
-    current_mail_id, current_start, current_end = chunk_index_windows[0]
+    current_mail_id, current_start, current_end = chunk_position_windows[0]
 
     # Itera sobre el resto de elementos de la lista para fusionar ventanas
-    for mail_id, start, end in chunk_index_windows[1:]:
+    for mail_id, start, end in chunk_position_windows[1:]:
         # Si es el mismo mail y solapa, amplía el final
         if mail_id == current_mail_id and start <= current_end + 1:
             current_end = max(current_end, end)
@@ -87,10 +87,10 @@ AugmentedList: TypeAlias = List[
 
 
 ChunkWindowRetrieval: TypeAlias = dict[
-    #  CLAVE: (MailId, ChunkIndex) -> VALOR: Chunk
+    #  CLAVE: (MailId, ChunkPosition) -> VALOR: Chunk
     tuple[
         UUID,  # MailId
-        int,  # ChunkIndex
+        int,  # ChunkPosition
     ],
     Chunk,
 ]
@@ -108,24 +108,24 @@ MailMetadata: TypeAlias = dict[
 
 def group_chunks(
     augmented_list: AugmentedList,
-    chunk_index_windows: ChunkIndexWindows,
+    chunk_position_windows: ChunkPositionWindows,
 ) -> List[AugmentedMailChunksGroup]:
     """
     Agrupa los chunks de cada grupo en un diccionario con metadatos del mail.
     """
-    by_mail_and_index: ChunkWindowRetrieval = {}  # Almacena claves tuplas de (mail_id, chunk_index) para los valores de los objetos chunks
+    by_mail_and_position: ChunkWindowRetrieval = {}  # Almacena claves tuplas de (mail_id, chunk_position) para los valores de los objetos chunks
     mail_metadata: MailMetadata = {}  # Almacena claves de mail_id para los valores de los metadatos de los mails
 
     for chunk, subject, sender, date in augmented_list:
-        by_mail_and_index[(chunk.mail_id, chunk.chunk_index)] = chunk
+        by_mail_and_position[(chunk.mail_id, chunk.position)] = chunk
         if chunk.mail_id not in mail_metadata:
             mail_metadata[chunk.mail_id] = (subject, sender, date)
 
     grouped_chunks: List[AugmentedMailChunksGroup] = []
-    for mail_id, start, end in chunk_index_windows:
+    for mail_id, start, end in chunk_position_windows:
         chunks_group: List[Chunk] = []
-        for chunk_index in range(start, end + 1):
-            chunk = by_mail_and_index.get((mail_id, chunk_index))
+        for chunk_position in range(start, end + 1):
+            chunk = by_mail_and_position.get((mail_id, chunk_position))
             if chunk is not None:
                 chunks_group.append(chunk)
 
@@ -154,39 +154,39 @@ def augment_chunks(
 ) -> List[AugmentedMailChunksGroup]:
     """
     Devuelve grupos de chunks contiguos por cada chunk similar (anchor),
-    manteniendo el orden por chunk_index dentro de cada grupo.
+    manteniendo el orden por position dentro de cada grupo.
     """
     if not similar_chunks:
         return []
 
-    chunk_index_windows: ChunkIndexWindows = []
+    chunk_position_windows: ChunkPositionWindows = []
     for chunk in similar_chunks:
-        start = max(1, chunk.chunk_index - chunks_range)  # Devuelve el índice del chunk más bajo, pero no menor a 1
-        end = chunk.chunk_index + chunks_range  # La consulta a la db se encargará de limitar el rango al máximo chunk_index disponible
-        chunk_index_windows.append((chunk.mail_id, start, end))  # Añade una tupla de elementos inalterables de posición por cada chunk 
+        start = max(1, chunk.position - chunks_range)  # Devuelve el índice del chunk más bajo, pero no menor a 1
+        end = chunk.position + chunks_range  # La consulta a la db se encargará de limitar el rango al máximo position disponible
+        chunk_position_windows.append((chunk.mail_id, start, end))  # Añade una tupla de elementos inalterables de posición por cada chunk 
 
-    chunk_index_windows = merge_windows(chunk_index_windows)
+    chunk_position_windows = merge_windows(chunk_position_windows)
 
     conditions = [
         and_(
             col(Chunk.mail_id) == mail_id,
-            col(Chunk.chunk_index) >= start,
-            col(Chunk.chunk_index) <= end,
+            col(Chunk.position) >= start,
+            col(Chunk.position) <= end,
         )
-        for mail_id, start, end in chunk_index_windows
+        for mail_id, start, end in chunk_position_windows
     ]
 
     query = (
         select(Chunk, Mail.subject, Mail.sender, Mail.date)
         .join(Mail, col(Chunk.mail_id) == col(Mail.id))
         .where(col(Mail.user_id) == user_id)
-        .where(or_(*conditions))  # or_ permite evaluar las condiciones de todas las ventanas de chunk_index y * desempaqueta la lista de condiciones
-        .order_by(col(Chunk.mail_id), col(Chunk.chunk_index))
+        .where(or_(*conditions))  # or_ permite evaluar las condiciones de todas las ventanas de chunk_position y * desempaqueta la lista de condiciones
+        .order_by(col(Chunk.mail_id), col(Chunk.position))
     )
     results = session.exec(query).all()
 
     augmented_list: AugmentedList = list(results)
-    return group_chunks(augmented_list, chunk_index_windows)
+    return group_chunks(augmented_list, chunk_position_windows)
 
 
 def merge_chunks(
@@ -198,7 +198,7 @@ def merge_chunks(
     items = []
     
     for grouped_mail_chunks in augmented_chunks:
-        joined_chunks = "\n".join(chunk.chunk_text for chunk in grouped_mail_chunks["chunk_list"])
+        joined_chunks = "\n".join(chunk.content for chunk in grouped_mail_chunks["chunk_list"])
 
         mail_block = (
             f"\nCORREO\n"

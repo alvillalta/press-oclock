@@ -59,13 +59,13 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     chunks_statement = (
-        select(Chunk.chunk_text)
+        select(Chunk.content)
         .where(Chunk.mail_id == mail.id)
-        .order_by(col(Chunk.chunk_index).asc())
+        .order_by(col(Chunk.position).asc())
     )
-    chunk_texts = session.exec(chunks_statement).all()
+    chunk_contents = session.exec(chunks_statement).all()
 
-    body = "".join(chunk_texts) if chunk_texts else None
+    body = "".join(chunk_contents) if chunk_contents else None
 
     return MailResponse.model_validate(mail, update={"body": body})
 

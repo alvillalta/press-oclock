@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 client = get_openai_client()
 
 async def generate_chunk_embeddings(
-    chunks: List[ChunkBase],  # cada chunk: {"chunk_index": ..., "chunk_text": ...}
+    chunks: List[ChunkBase],  # cada chunk: {"position": ..., "content": ...}
     batch_size,
     max_retries,
     wait_seconds,
@@ -24,7 +24,7 @@ async def generate_chunk_embeddings(
 
     for index in range(0, len(chunks), batch_size):
         batch = chunks[index : index + batch_size]
-        inputs = [chunk.chunk_text for chunk in batch]
+        inputs = [chunk.content for chunk in batch]
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -44,19 +44,19 @@ async def generate_chunk_embeddings(
         
         for chunk, datum in zip(batch, response.data):
             # Quita el ovelap del texto de los chunks antes de guardar en la db
-            if chunk.chunk_index == 1:
-                chunk_text_to_store = chunk.chunk_text
+            if chunk.position == 1:
+                chunk_content_to_store = chunk.content
             else:
-                if len(chunk.chunk_text) <= overlaped_characters:
+                if len(chunk.content) <= overlaped_characters:
                     continue
-                chunk_text_to_store = chunk.chunk_text[overlaped_characters:]
-            if not chunk_text_to_store.strip():
+                chunk_content_to_store = chunk.content[overlaped_characters:]
+            if not chunk_content_to_store.strip():
                 continue
 
             results.append(
                 ChunkCreate(
-                    chunk_index=chunk.chunk_index,
-                    chunk_text=chunk_text_to_store,
+                    position=chunk.position,
+                    content=chunk_content_to_store,
                     embedding=datum.embedding,
                 )
             )

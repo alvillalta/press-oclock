@@ -110,11 +110,11 @@ class MailResponse(MailBase):
 
 # Chunk shared properties
 class ChunkBase(SQLModel):
-    chunk_text: str = Field(
+    content: str = Field(
         min_length=1, 
         max_length=800, 
     )
-    chunk_index: int = Field(gt=0)
+    position: int = Field(gt=0)
 
 
 class ChunkCreate(ChunkBase):
@@ -123,7 +123,7 @@ class ChunkCreate(ChunkBase):
 
 # Properties to receive on chunk update
 class ChunkUpdate(SQLModel):
-    chunk_text: str = Field(
+    content: str = Field(
         min_length=1, 
         max_length=800, 
     )
@@ -165,7 +165,7 @@ QuestionEmbedding = Annotated[
 
 class Sources(MailBase):
     mail_id: uuid.UUID = Field(foreign_key="mail.id", nullable=False, ondelete="CASCADE")
-    chunk_text: str = Field(
+    content: str = Field(
         min_length=1, 
         max_length=800, 
     )

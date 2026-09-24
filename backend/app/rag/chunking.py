@@ -1,7 +1,7 @@
 from typing import List
 from app.models import ChunkBase
 
-def chunk_text(text: str, chunk_size, overlap) -> List[ChunkBase] | None:
+def chunk_content(text: str, chunk_size, overlap) -> List[ChunkBase] | None:
     """
     Descompone un texto en chunks con solapamiento.
     """
@@ -12,11 +12,11 @@ def chunk_text(text: str, chunk_size, overlap) -> List[ChunkBase] | None:
     while start < len(text):
         # Toma chunk_size caracteres desde la posición actual
         end = start + chunk_size
-        chunk_text = text[start:end]
-        chunk_index = len(chunks) + 1
+        content = text[start:end]
+        position = len(chunks) + 1
         chunk = ChunkBase(
-            chunk_text=chunk_text,
-            chunk_index=chunk_index
+            content=content,
+            position=position
         )
         chunks.append(chunk)
         
@@ -35,4 +35,4 @@ class ChunkingTextService:
     
     def chunk_email_body(self, body: str) -> List[ChunkBase] | None:
         """Descompone el body de un correo en chunks."""
-        return chunk_text(body, self.chunk_size, self.overlap)
+        return chunk_content(body, self.chunk_size, self.overlap)
