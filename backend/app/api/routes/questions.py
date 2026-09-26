@@ -16,25 +16,17 @@ logger = get_logger(__name__)
 
 @router.get("/", response_model=list[Question])
 def read_questions(
-    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
+    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 50
 ) -> Any:
     """
     Retrieve questions.
     """
     if current_user.is_superuser:
-        count_statement = select(func.count()).select_from(Question)
-        count = session.exec(count_statement).one()
         statement = (
             select(Question).order_by(col(Question.created_at).desc()).offset(skip).limit(limit)
         )
         questions = session.exec(statement).all()
     else:
-        count_statement = (
-            select(func.count())
-            .select_from(Question)
-            .where(Question.user_id == current_user.id)
-        )
-        count = session.exec(count_statement).one()
         statement = (
             select(Question)
             .where(Question.user_id == current_user.id)
@@ -65,14 +57,13 @@ async def create_question(
     *, session: SessionDep, current_user: CurrentUser, question_in: QuestionBase
 ) -> Question:
     """
-    Answer a question using the RAG model of the application.
+    Answer a question using the RAG system.
     """
-
     logger.info("Routing question")
-    question_service = RagService(session=session)
-
+    
+    rag_service = RagService(session=session)
     try:
-        return await question_service.answer_question(
+        return await rag_service.answer_question(
             question_in=question_in, user_id=current_user.id
         )
     except ValueError as exc:

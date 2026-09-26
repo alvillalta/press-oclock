@@ -1,11 +1,11 @@
 import uuid
-from typing import Annotated, Any, TypeAlias, TypedDict
 from datetime import datetime, timezone
+from typing import Annotated, Optional, TypedDict
 
-from pydantic import EmailStr, StringConstraints
-from sqlalchemy import DateTime
-from sqlmodel import JSON, Field, Relationship, SQLModel
 from pgvector.sqlalchemy import Vector
+from pydantic import EmailStr, StringConstraints
+from sqlalchemy import DateTime, UniqueConstraint
+from sqlmodel import JSON, Field, Relationship, SQLModel
 
 
 def get_datetime_utc() -> datetime:
@@ -74,7 +74,23 @@ class UsersPublic(SQLModel):
 class MailBase(SQLModel):
     subject: str | None = Field(default=None, max_length=255)
     sender: EmailStr = Field(max_length=255)
-    date: datetime = Field(sa_type=DateTime(timezone=True))
+    received_at: datetime = Field(sa_type=DateTime(timezone=True))
+
+
+class Source(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    origin: str = Field(max_length=50, index=True)
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+    mail: Optional["Mail"] = Relationship(  # noqa: UP045
+        back_populates="source",
+    )
+    attachment: Optional["Attachment"] = Relationship(  # noqa: UP045
+        back_populates="source",
+    )
+    chunks: list["Chunk"] = Relationship(back_populates="source", cascade_delete=True)
 
 
 # External Mail model
@@ -84,7 +100,7 @@ class MailData(MailBase):
 
 # Properties to receive on mail creation
 class MailCreate(MailBase):
-    pass
+    body: str | None = Field(default=None)
 
 
 # Mail database model
@@ -93,26 +109,60 @@ class Mail(MailBase, table=True):
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
+    source_id: uuid.UUID = Field(
+        foreign_key="source.id", nullable=False, unique=True, ondelete="CASCADE"
+    )
+    body: str | None = Field(default=None)
     user: User | None = Relationship(back_populates="mails")
+    source: Source | None = Relationship(
+        back_populates="mail",
+    )
+    attachments: list["Attachment"] = Relationship(
+        back_populates="mail", cascade_delete=True
+    )
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
     )
-    chunks: list["Chunk"] = Relationship(back_populates="mail", cascade_delete=True)
 
 
-class MailResponse(MailBase):
+class MailPublic(MailBase):
     id: uuid.UUID
     user_id: uuid.UUID
+    source_id: uuid.UUID
     created_at: datetime
+
+
+class MailResponse(MailPublic):
     body: str | None = None
-    
+
+
+class Attachment(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    mail_id: uuid.UUID = Field(
+        foreign_key="mail.id", nullable=False, ondelete="CASCADE"
+    )
+    source_id: uuid.UUID = Field(
+        foreign_key="source.id", nullable=False, unique=True, ondelete="CASCADE"
+    )
+    filename: str = Field(max_length=255)
+    mime_type: str = Field(max_length=255)
+    storage_path: str
+    extraction: str | None = Field(default=None)
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+    mail: Mail | None = Relationship(back_populates="attachments")
+    source: Source | None = Relationship(
+        back_populates="attachment",
+    )
 
 # Chunk shared properties
 class ChunkBase(SQLModel):
     content: str = Field(
-        min_length=1, 
-        max_length=800, 
+        min_length=1,
+        max_length=800,
     )
     position: int = Field(gt=0)
 
@@ -124,37 +174,42 @@ class ChunkCreate(ChunkBase):
 # Properties to receive on chunk update
 class ChunkUpdate(SQLModel):
     content: str = Field(
-        min_length=1, 
-        max_length=800, 
+        min_length=1,
+        max_length=800,
     )
 
 
 # Chunk database model
 class Chunk(ChunkCreate, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    mail_id: uuid.UUID = Field(
-        foreign_key="mail.id", nullable=False, ondelete="CASCADE"
+    source_id: uuid.UUID = Field(
+        foreign_key="source.id", nullable=False, ondelete="CASCADE"
     )
-    mail: Mail | None = Relationship(back_populates="chunks")
+    source: Source | None = Relationship(back_populates="chunks")
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
     )
+    __table_args__ = (
+        UniqueConstraint("source_id", "position", name="uq_chunk_source_position"),
+    )
 
 
-class AugmentedMailChunksGroup(TypedDict):
+class AugmentedSourceChunksGroup(TypedDict):
+    source_id: uuid.UUID
+    origin: str
     mail_id: uuid.UUID
     subject: str | None
     sender: EmailStr
-    date: datetime
+    received_at: datetime
     chunk_list: list[Chunk]
 
 
 # Question shared properties
 QuestionBase = Annotated[
-        str, 
+        str,
         StringConstraints(min_length=1, max_length=800, strip_whitespace=True)
-    ]
+]
 
 
 QuestionEmbedding = Annotated[
@@ -163,11 +218,13 @@ QuestionEmbedding = Annotated[
     ]
 
 
-class Sources(MailBase):
-    mail_id: uuid.UUID = Field(foreign_key="mail.id", nullable=False, ondelete="CASCADE")
+class SourceCitation(MailBase):
+    source_id: uuid.UUID
+    origin: str
+    mail_id: uuid.UUID
     content: str = Field(
-        min_length=1, 
-        max_length=800, 
+        min_length=1,
+        max_length=800,
     )
 
 
@@ -188,13 +245,12 @@ class Question(QuestionCreate, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
     )
-    
 
 # Generic message
 class Message(SQLModel):
     message: str
 
-""" 
+"""
 # Login request payload
 class LoginRequest(SQLModel):
     email: EmailStr

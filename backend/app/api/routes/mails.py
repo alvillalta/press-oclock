@@ -1,40 +1,32 @@
 import uuid
-from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Depends
-from sqlmodel import col, func, select
+from fastapi import APIRouter, HTTPException
+from sqlmodel import col, select
 
+from app import crud
 from app.api.deps import CurrentUser, MakeApiKeyDep, SessionDep
 from app.core.config import settings
-from app.models import Chunk, Mail, MailData, MailResponse, Message
-from app.services.mail_service import MailService
 from app.core.logging import get_logger
-
-router = APIRouter(prefix="/mails", tags=["mails"])
+from app.models import Mail, MailData, MailPublic, MailResponse, Message
+from app.services.mail_service import MailService
 
 logger = get_logger(__name__)
 
-@router.get("/", response_model=list[Mail])
+router = APIRouter(prefix="/mails", tags=["mails"])
+
+@router.get("/", response_model=list[MailPublic])
 def read_mails(
-    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
-) -> list[Mail]:
+    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 50
+) -> list[MailPublic]:
     """
     Retrieve mails.
     """
     if current_user.is_superuser:
-        count_statement = select(func.count()).select_from(Mail)
-        count = session.exec(count_statement).one()
         statement = (
             select(Mail).order_by(col(Mail.created_at).desc()).offset(skip).limit(limit)
         )
         mails = session.exec(statement).all()
     else:
-        count_statement = (
-            select(func.count())
-            .select_from(Mail)
-            .where(Mail.user_id == current_user.id)
-        )
-        count = session.exec(count_statement).one()
         statement = (
             select(Mail)
             .where(Mail.user_id == current_user.id)
@@ -44,11 +36,13 @@ def read_mails(
         )
         mails = session.exec(statement).all()
 
-    return mails
+    return [MailPublic.model_validate(mail) for mail in mails]
 
 
 @router.get("/{id}", response_model=MailResponse)
-def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Mail:
+def read_mail(
+    session: SessionDep, current_user: CurrentUser, id: uuid.UUID
+) -> MailResponse:
     """
     Get mail by ID.
     """
@@ -57,35 +51,22 @@ def read_mail(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> 
         raise HTTPException(status_code=404, detail="Mail not found")
     if (mail.user_id != current_user.id) and (not current_user.is_superuser):
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    chunks_statement = (
-        select(Chunk.content)
-        .where(Chunk.mail_id == mail.id)
-        .order_by(col(Chunk.position).asc())
-    )
-    chunk_contents = session.exec(chunks_statement).all()
 
-    body = "".join(chunk_contents) if chunk_contents else None
-
-    return MailResponse.model_validate(mail, update={"body": body})
+    return MailResponse.model_validate(mail)
 
 
-@router.post("/", response_model=Mail)
+@router.post("/", response_model=MailPublic)
 async def ingest_mail(
-    *, session: SessionDep, mail_data: MailData, api_key: MakeApiKeyDep
+    *, session: SessionDep, mail_data: MailData, _api_key: MakeApiKeyDep
 ) -> Mail:
     """
-    Ingest a new mail with embeddings directly into the system.
+    Ingesta de un correo y sus embeddings dentro del sistema.
+    Este flujo no es multiusuario, se resuelve a partir de la configuración con Make
+    (de ahí user_id=settings.MAIL_WEBHOOK_USER_ID)
     """
-    if settings.MAIL_WEBHOOK_USER_ID is None:
-        raise HTTPException(
-            status_code=500,
-            detail="MAIL_WEBHOOK_USER_ID must be configured for the webhook user",
-        )
-
-    logger.info(f"Receiving mail from {mail_data.sender}")
+    logger.info("Routing mail from external integrator")
+    
     mail_service = MailService(session=session)
-
     return await mail_service.process_mail(
         mail_data=mail_data, user_id=settings.MAIL_WEBHOOK_USER_ID
     )
@@ -103,6 +84,6 @@ def delete_mail(
         raise HTTPException(status_code=404, detail="Mail not found")
     if (mail.user_id != current_user.id) and (not current_user.is_superuser):
         raise HTTPException(status_code=403, detail="Not enough permissions")
-    session.delete(mail)
+    crud.delete_mail(session=session, mail_in=mail)
     session.commit()
     return Message(message="Mail deleted successfully")

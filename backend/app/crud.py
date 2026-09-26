@@ -1,10 +1,22 @@
-from uuid import UUID
 from typing import Any
+from uuid import UUID
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, delete, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import ChunkCreate, Chunk, Mail, MailCreate, Message, Question, QuestionBase, QuestionCreate, User, UserCreate, UserUpdate
+from app.models import (
+    Chunk,
+    ChunkCreate,
+    Mail,
+    MailCreate,
+    Message,
+    Question,
+    QuestionCreate,
+    Source,
+    User,
+    UserCreate,
+    UserUpdate,
+)
 
 
 def create_user(*, session: Session, user_create: UserCreate) -> User:
@@ -61,20 +73,44 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
 
 
 def create_mail(*, session: Session, mail_in: MailCreate, user_id: UUID) -> Mail:
-    db_mail = Mail.model_validate(mail_in, update={"user_id": user_id})
+    db_source = Source(origin="mail")
+    db_mail = Mail.model_validate(
+        mail_in,
+        update={"user_id": user_id, "source_id": db_source.id},
+    )
+    db_mail.source = db_source
     session.add(db_mail)
     session.commit()
     session.refresh(db_mail)
     return db_mail
 
 
-def create_chunks(*, session: Session, chunks_in: list[ChunkCreate], mail_in: Mail) -> Mail:
+def create_chunks(
+    *, session: Session, chunks_in: list[ChunkCreate], source_id: UUID
+) -> Message:
     for chunk in chunks_in:
-        db_chunk = Chunk.model_validate(chunk, update={"mail_id": mail_in.id})
+        db_chunk = Chunk.model_validate(chunk, update={"source_id": source_id})
         session.add(db_chunk)
     session.commit()
-    session.refresh(mail_in)
     return Message(message="Chunks created successfully")
+
+
+def delete_mail(*, session: Session, mail_in: Mail) -> None:
+    """Delete a mail, its chunks and its mail-body source."""
+    source_id = mail_in.source_id
+    session.exec(delete(Chunk).where(col(Chunk.source_id) == source_id))
+    session.delete(mail_in)
+    session.flush()
+
+    source = session.get(Source, source_id)
+    if source is not None:
+        session.delete(source)
+
+
+def delete_user_mails(*, session: Session, user_id: UUID) -> None:
+    mails = session.exec(select(Mail).where(Mail.user_id == user_id)).all()
+    for mail in mails:
+        delete_mail(session=session, mail_in=mail)
 
 
 def create_question(*, session: Session, question_in: QuestionCreate, user_id: UUID) -> Question:

@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlmodel import Session
 
-from app.rag.embeddings import ChunkingEmbeddingService
+from app.rag.embeddings import EmbeddingService
 from app.rag.retrieval_augmentation import RetrievalAugmentationService
 from app.rag.generation import GenerationService
 from app.rag.sources import get_sources
@@ -21,17 +21,17 @@ class RagService:
         """
         Responde a una pregunta utilizando el modelo RAG de la aplicación.
         """
-        logger.info("Answering question")
+        logger.info("Answering and persisting question")
 
-        chunking_embedding_service = ChunkingEmbeddingService()
-        embedded_question = await chunking_embedding_service.create_question_embedding(question_in)
+        embedding_service = EmbeddingService()
+        embedded_question = await embedding_service.create_question_embedding(question_in)
         if not embedded_question:
             raise ValueError("No embedding generated for the question")
         
         retrieval_augmentation_service = RetrievalAugmentationService()
         similar_chunks = retrieval_augmentation_service.search_similar_chunks(session=self.session, embedded_question=embedded_question, user_id=user_id)
         if not similar_chunks:
-            raise ValueError("No chunks found for current user")
+            raise ValueError("No similar chunks found for current user")
         
         augmented_chunks = retrieval_augmentation_service.expand_information(session=self.session, similar_chunks=similar_chunks, user_id=user_id)
         context = retrieval_augmentation_service.build_context(augmented_chunks)
@@ -50,5 +50,7 @@ class RagService:
             sources=serialized_sources,
         )
         db_question = create_question(session=self.session, question_in=question, user_id=user_id)
+
+        logger.info("RAG Service OK")
 
         return db_question

@@ -1,4 +1,3 @@
-from backend.tests.conftest import client
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 

@@ -1,11 +1,10 @@
-import logging
-
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.openai_client import get_openai_client
 from app.models import QuestionBase
 from openai.types.chat import ChatCompletionMessageParam  # Formato de salida de la API de OpenAI
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 client = get_openai_client()
 

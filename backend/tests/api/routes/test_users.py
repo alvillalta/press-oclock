@@ -7,7 +7,8 @@ from sqlmodel import Session, select
 from app import crud
 from app.core.config import settings
 from app.core.security import verify_password
-from app.models import User, UserCreate
+from app.models import Chunk, ChunkCreate, Mail, Source, User, UserCreate
+from tests.utils.mail import create_random_mail
 from tests.utils.user import create_random_user
 from tests.utils.utils import random_email, random_lower_string
 
@@ -477,6 +478,37 @@ def test_delete_user_super_user(
     assert deleted_user["message"] == "User deleted successfully"
     result = db.exec(select(User).where(User.id == user_id)).first()
     assert result is None
+
+
+def test_delete_user_cleans_mail_sources_and_chunks(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    user = create_random_user(db)
+    assert user.id is not None
+    mail = create_random_mail(db, user_id=user.id)
+    crud.create_chunks(
+        session=db,
+        source_id=mail.source_id,
+        chunks_in=[
+            ChunkCreate(
+                content="A chunk to delete.",
+                position=1,
+                embedding=[0.0] * 1536,
+            )
+        ],
+    )
+
+    response = client.delete(
+        f"{settings.API_V1_STR}/users/{user.id}",
+        headers=superuser_token_headers,
+    )
+
+    assert response.status_code == 200
+    db.expire_all()
+    assert db.get(User, user.id) is None
+    assert db.get(Mail, mail.id) is None
+    assert db.get(Source, mail.source_id) is None
+    assert db.exec(select(Chunk).where(Chunk.source_id == mail.source_id)).all() == []
 
 
 def test_delete_user_not_found(

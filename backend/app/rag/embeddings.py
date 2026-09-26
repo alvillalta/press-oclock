@@ -1,12 +1,12 @@
-import logging 
 import asyncio
 from typing import List
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.openai_client import get_openai_client
 from app.models import ChunkBase, ChunkCreate, QuestionBase, QuestionEmbedding
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 client = get_openai_client()
 
@@ -20,6 +20,8 @@ async def generate_chunk_embeddings(
     """
     Crea embeddings para una lista de chunks.
     """
+    logger.info("Embedding a list of chunks through an AI model")
+
     results: List[ChunkCreate] = []
 
     for index in range(0, len(chunks), batch_size):
@@ -40,6 +42,7 @@ async def generate_chunk_embeddings(
                 await asyncio.sleep(wait_seconds * attempt)
 
         if len(batch) != len(response.data):
+            #response.data es la lista de embeddings que devuelve OpenAI por cada chunk del batch
             raise ValueError("Mismatch between number of chunks and embeddings returned")
         
         for chunk, datum in zip(batch, response.data):
@@ -71,7 +74,8 @@ async def generate_question_embedding(
     """
     Crea un embedding para una pregunta.
     """
-
+    logger.info("Embedding a question through an AI model")
+    
     for attempt in range(1, max_retries + 1):
         try:
             response = await client.embeddings.create(
@@ -90,10 +94,10 @@ async def generate_question_embedding(
     return embedded_question
 
 
-class ChunkingEmbeddingService:
+class EmbeddingService:
     """Servicio para generar embeddings."""
     
-    def __init__(self, batch_size: int = 100, max_retries: int = 3, wait_seconds: int = 2, overlaped_characters: int = 100):
+    def __init__(self, batch_size: int = 50, max_retries: int = 3, wait_seconds: int = 2, overlaped_characters: int = 100):
         self.batch_size = batch_size
         self.max_retries = max_retries
         self.wait_seconds = wait_seconds
