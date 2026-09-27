@@ -62,14 +62,11 @@ const UserInformation = () => {
   })
 
   const onSubmit = (data: FormData) => {
-    const updateData: UserUpdateMe = {}
+    const updateData: UserUpdateMe = { email: data.email }
 
-    // only include fields that have changed
+    // Include the required email and only update the name when it changed.
     if (data.full_name !== currentUser?.full_name) {
       updateData.full_name = data.full_name
-    }
-    if (data.email !== currentUser?.email) {
-      updateData.email = data.email
     }
 
     mutation.mutate(updateData)

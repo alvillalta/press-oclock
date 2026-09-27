@@ -2,14 +2,13 @@ from uuid import UUID
 
 from sqlmodel import Session
 
-from app.rag.embeddings import EmbeddingService
-from app.rag.retrieval_augmentation import RetrievalAugmentationService
-from app.rag.generation import GenerationService
-from app.rag.sources import get_sources
-
 from app.core.logging import get_logger
-from app.models import Question, QuestionBase, QuestionCreate
 from app.crud import create_question
+from app.models import Question, QuestionBase, QuestionCreate
+from app.rag.embeddings import EmbeddingService
+from app.rag.generation import GenerationService
+from app.rag.retrieval_augmentation import RetrievalAugmentationService
+from app.rag.sources import get_sources, load_source_details
 
 logger = get_logger(__name__)
 
@@ -33,8 +32,12 @@ class RagService:
         if not similar_chunks:
             raise ValueError("No similar chunks found for current user")
         
-        augmented_chunks = retrieval_augmentation_service.expand_information(session=self.session, similar_chunks=similar_chunks, user_id=user_id)
-        context = retrieval_augmentation_service.build_context(augmented_chunks)
+        augmented_chunks = retrieval_augmentation_service.augment_chunk_groups(session=self.session, similar_chunks=similar_chunks, user_id=user_id)
+        augmented_chunks = load_source_details(
+            session=self.session,
+            source_groups=augmented_chunks,
+        )
+        context = retrieval_augmentation_service.build_prompt_context(augmented_chunks)
 
         generation_service = GenerationService()
         answer = await generation_service.generate_answer(question_in, context)

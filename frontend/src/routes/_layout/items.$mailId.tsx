@@ -1,11 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 
-import { MailsService, type Mail } from "@/client"
-
-type MailDetail = Mail & {
-  body?: string | null
-}
+import { MailsService } from "@/client"
 
 export const Route = createFileRoute("/_layout/items/$mailId")({
   component: MailDetailPage,
@@ -23,10 +19,7 @@ function MailDetailPage() {
 
   const { data: mail } = useSuspenseQuery({
     queryKey: ["mail", mailId],
-    queryFn: async () => {
-      const response = await MailsService.readMail({ id: mailId })
-      return response as MailDetail
-    },
+    queryFn: () => MailsService.readMail({ id: mailId }),
   })
 
   return (
@@ -37,7 +30,9 @@ function MailDetailPage() {
 
       <div className="mt-4 flex items-start justify-between gap-4 border-b border-border pb-4 text-sm text-muted-foreground">
         <p className="min-w-0 truncate">{mail.sender}</p>
-        <p className="shrink-0 text-right">{new Date(mail.date).toLocaleString()}</p>
+        <p className="shrink-0 text-right">
+          {new Date(mail.received_at).toLocaleString()}
+        </p>
       </div>
 
       <div className="mt-6 whitespace-pre-wrap break-words text-[15px] leading-7 text-card-foreground">

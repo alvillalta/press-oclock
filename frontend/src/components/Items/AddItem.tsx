@@ -32,7 +32,7 @@ import { handleError } from "@/utils"
 
 const formSchema = z.object({
   sender: z.string().email({ message: "A valid sender email is required" }),
-  date: z.string().min(1, { message: "Date is required" }),
+  received_at: z.string().min(1, { message: "Received at is required" }),
   subject: z.string().optional(),
   body: z.string().optional(),
 })
@@ -50,14 +50,15 @@ const AddItem = () => {
     criteriaMode: "all",
     defaultValues: {
       sender: "",
-      date: "",
+      received_at: "",
       subject: "",
       body: "",
     },
   })
 
   const mutation = useMutation({
-    mutationFn: (data: MailData) => MailsService.ingestMail({ requestBody: data }),
+    mutationFn: (data: MailData) =>
+      MailsService.ingestMail({ requestBody: data }),
     onSuccess: () => {
       showSuccessToast("Mail ingested successfully")
       form.reset()
@@ -72,7 +73,7 @@ const AddItem = () => {
   const onSubmit = (data: FormData) => {
     mutation.mutate({
       sender: data.sender,
-      date: new Date(data.date).toISOString(),
+      received_at: new Date(data.received_at).toISOString(),
       subject: data.subject,
       body: data.body,
     })
@@ -90,7 +91,8 @@ const AddItem = () => {
         <DialogHeader>
           <DialogTitle>Añadir correo</DialogTitle>
           <DialogDescription>
-            Fill in sender, subject, date and body to ingest a new mail.
+            Fill in sender, subject, received time and body to ingest a new
+            mail.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -119,11 +121,11 @@ const AddItem = () => {
 
               <FormField
                 control={form.control}
-                name="date"
+                name="received_at"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Date <span className="text-destructive">*</span>
+                      Received at <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input type="datetime-local" {...field} required />
@@ -140,7 +142,11 @@ const AddItem = () => {
                   <FormItem>
                     <FormLabel>Subject</FormLabel>
                     <FormControl>
-                      <Input placeholder="Mail subject" type="text" {...field} />
+                      <Input
+                        placeholder="Mail subject"
+                        type="text"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -160,7 +166,6 @@ const AddItem = () => {
                   </FormItem>
                 )}
               />
-
             </div>
 
             <DialogFooter>

@@ -13,19 +13,31 @@ export type HTTPValidationError = {
     detail?: Array<ValidationError>;
 };
 
-export type Mail = {
-    subject?: (string | null);
-    sender: string;
-    date: string;
-    id?: string;
-    user_id: string;
-    created_at?: string;
-};
-
 export type MailData = {
     subject?: (string | null);
     sender: string;
-    date: string;
+    received_at: string;
+    body?: (string | null);
+};
+
+export type MailPublic = {
+    subject?: (string | null);
+    sender: string;
+    received_at: string;
+    id: string;
+    user_id: string;
+    source_id: string;
+    created_at: string;
+};
+
+export type MailResponse = {
+    subject?: (string | null);
+    sender: string;
+    received_at: string;
+    id: string;
+    user_id: string;
+    source_id: string;
+    created_at: string;
     body?: (string | null);
 };
 
@@ -99,7 +111,7 @@ export type UserUpdate = {
     is_active?: boolean;
     is_superuser?: boolean;
     full_name?: (string | null);
-    password: string;
+    password?: (string | null);
 };
 
 export type UserUpdateMe = {
@@ -148,19 +160,19 @@ export type MailsReadMailsData = {
     skip?: number;
 };
 
-export type MailsReadMailsResponse = (Array<Mail>);
+export type MailsReadMailsResponse = (Array<MailPublic>);
 
 export type MailsIngestMailData = {
     requestBody: MailData;
 };
 
-export type MailsIngestMailResponse = (Mail);
+export type MailsIngestMailResponse = (MailPublic);
 
 export type MailsReadMailData = {
     id: string;
 };
 
-export type MailsReadMailResponse = (Mail);
+export type MailsReadMailResponse = (MailResponse);
 
 export type MailsDeleteMailData = {
     id: string;

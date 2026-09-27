@@ -88,7 +88,7 @@ def test_delete_mail_deletes_its_source_and_chunks(
             ChunkCreate(
                 content="A chunk to delete.",
                 position=1,
-                embedding=[0.0] * 1536,
+                embedding=[0.0] * settings.EMBEDDING_DIMENSIONS,
             )
         ],
     )
@@ -106,7 +106,7 @@ def test_delete_mail_deletes_its_source_and_chunks(
     assert db.exec(select(Chunk).where(Chunk.source_id == mail.source_id)).all() == []
 
 
-class FakeChunkingEmbeddingService:
+class FakeEmbeddingService:
     async def create_chunk_embeddings(
         self, chunks: list[ChunkBase]
     ) -> list[ChunkCreate]:
@@ -114,7 +114,7 @@ class FakeChunkingEmbeddingService:
             ChunkCreate(
                 content=chunk.content,
                 position=chunk.position,
-                embedding=[0.0] * 1536,
+                embedding=[0.0] * settings.EMBEDDING_DIMENSIONS,
             )
             for chunk in chunks
         ]
@@ -129,8 +129,8 @@ def test_ingest_mail_creates_source_and_chunks(
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
     monkeypatch.setattr(
-        "app.services.mail_service.ChunkingEmbeddingService",
-        FakeChunkingEmbeddingService,
+        "app.services.mail_service.EmbeddingService",
+        FakeEmbeddingService,
     )
     data = {
         "sender": "sender@example.com",
@@ -152,6 +152,7 @@ def test_ingest_mail_creates_source_and_chunks(
     source = db.get(Source, mail.source_id)
     assert source is not None
     assert source.origin == "mail"
+    assert source.user_id == webhook_user.id
     chunks = db.exec(select(Chunk).where(Chunk.source_id == source.id)).all()
     assert len(chunks) == 1
     assert chunks[0].content == data["body"]
@@ -175,7 +176,7 @@ def test_ingest_mail_without_body_does_not_create_chunks(
             raise AssertionError("Empty mail bodies should not be embedded")
 
     monkeypatch.setattr(
-        "app.services.mail_service.ChunkingEmbeddingService",
+        "app.services.mail_service.EmbeddingService",
         EmbeddingServiceMustNotRun,
     )
     data = {

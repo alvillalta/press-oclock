@@ -1,7 +1,7 @@
 import { EllipsisVertical } from "lucide-react"
 import { useState } from "react"
 
-import type { Mail } from "@/client"
+import type { MailPublic } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,7 +11,7 @@ import {
 import DeleteItem from "../Items/DeleteItem"
 
 interface ItemActionsMenuProps {
-  item: Mail
+  item: MailPublic
 }
 
 export const ItemActionsMenu = ({ item }: ItemActionsMenuProps) => {
@@ -20,11 +20,18 @@ export const ItemActionsMenu = ({ item }: ItemActionsMenuProps) => {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" onClick={(event) => event.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(event) => event.stopPropagation()}
+        >
           <EllipsisVertical />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+      <DropdownMenuContent
+        align="end"
+        onClick={(event) => event.stopPropagation()}
+      >
         <DeleteItem id={item.id} onSuccess={() => setOpen(false)} />
       </DropdownMenuContent>
     </DropdownMenu>

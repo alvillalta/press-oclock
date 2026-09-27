@@ -1,11 +1,14 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Optional, TypedDict
+from typing import Annotated, Any, Optional, TypedDict
 
+from app.core.config import settings
 from pgvector.sqlalchemy import Vector
 from pydantic import EmailStr, StringConstraints
-from sqlalchemy import DateTime, UniqueConstraint
+from sqlalchemy import DateTime, Index, UniqueConstraint
 from sqlmodel import JSON, Field, Relationship, SQLModel
+
+
 
 
 def get_datetime_utc() -> datetime:
@@ -31,10 +34,10 @@ class UserRegister(SQLModel):
     full_name: str | None = Field(default=None, max_length=255)
 
 
-# Properties to receive via API on update, all are optional
+# Fields accepted by the superuser update endpoint. Email is required, while omitted fields retain their current values.
 class UserUpdate(UserBase):
     email: EmailStr = Field(unique=True, max_length=255)
-    password: str = Field(min_length=8, max_length=128)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 class UserUpdateMe(SQLModel):
@@ -80,6 +83,9 @@ class MailBase(SQLModel):
 class Source(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     origin: str = Field(max_length=50, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
@@ -91,6 +97,9 @@ class Source(SQLModel, table=True):
         back_populates="source",
     )
     chunks: list["Chunk"] = Relationship(back_populates="source", cascade_delete=True)
+    __table_args__ = (
+        Index("ix_source_user_origin", "user_id", "origin"),
+    )
 
 
 # External Mail model
@@ -168,7 +177,11 @@ class ChunkBase(SQLModel):
 
 
 class ChunkCreate(ChunkBase):
-    embedding: list[float] = Field(sa_type=Vector(1536))
+    embedding: list[float] = Field(
+        min_length=settings.EMBEDDING_DIMENSIONS,
+        max_length=settings.EMBEDDING_DIMENSIONS,
+        sa_type=Vector(settings.EMBEDDING_DIMENSIONS),
+    )
 
 
 # Properties to receive on chunk update
@@ -195,13 +208,10 @@ class Chunk(ChunkCreate, table=True):
     )
 
 
-class AugmentedSourceChunksGroup(TypedDict):
+class AugmentedChunksGroup(TypedDict):
     source_id: uuid.UUID
     origin: str
-    mail_id: uuid.UUID
-    subject: str | None
-    sender: EmailStr
-    received_at: datetime
+    details: dict[str, Any]
     chunk_list: list[Chunk]
 
 
@@ -213,25 +223,25 @@ QuestionBase = Annotated[
 
 
 QuestionEmbedding = Annotated[
-        list[float],
-        Field(sa_type=Vector(1536))
-    ]
+    list[float],
+    Field(min_length=settings.EMBEDDING_DIMENSIONS, max_length=settings.EMBEDDING_DIMENSIONS),
+]
 
 
-class SourceCitation(MailBase):
+class SourceCitation(SQLModel):
     source_id: uuid.UUID
     origin: str
-    mail_id: uuid.UUID
     content: str = Field(
         min_length=1,
         max_length=800,
     )
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class QuestionCreate(SQLModel):
     question: QuestionBase
     answer: str
-    sources: list[dict] = Field(default_factory=list, sa_type=JSON)
+    sources: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
 
 
 # Question database model

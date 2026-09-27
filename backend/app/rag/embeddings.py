@@ -10,6 +10,13 @@ logger = get_logger(__name__)
 
 client = get_openai_client()
 
+
+def validate_embedding_dimensions(embedding: list[float]) -> list[float]:
+    if len(embedding) != settings.EMBEDDING_DIMENSIONS:
+        raise ValueError("Expected an embedding with a different number of dimensions.")
+    return embedding
+
+
 async def generate_chunk_embeddings(
     chunks: List[ChunkBase],  # cada chunk: {"position": ..., "content": ...}
     batch_size,
@@ -45,7 +52,9 @@ async def generate_chunk_embeddings(
             #response.data es la lista de embeddings que devuelve OpenAI por cada chunk del batch
             raise ValueError("Mismatch between number of chunks and embeddings returned")
         
-        for chunk, datum in zip(batch, response.data):
+        for chunk, datum in zip(batch, response.data, strict=True):
+            embedding = validate_embedding_dimensions(datum.embedding)
+
             # Quita el ovelap del texto de los chunks antes de guardar en la db
             if chunk.position == 1:
                 chunk_content_to_store = chunk.content
@@ -60,11 +69,12 @@ async def generate_chunk_embeddings(
                 ChunkCreate(
                     position=chunk.position,
                     content=chunk_content_to_store,
-                    embedding=datum.embedding,
+                    embedding=embedding,
                 )
             )
 
     return results
+
 
 async def generate_question_embedding(
     question: QuestionBase,
@@ -89,7 +99,7 @@ async def generate_question_embedding(
                 raise
             await asyncio.sleep(wait_seconds * attempt)
     
-    embedded_question = response.data[0].embedding
+    embedded_question = validate_embedding_dimensions(response.data[0].embedding)
 
     return embedded_question
 
@@ -110,4 +120,3 @@ class EmbeddingService:
     async def create_question_embedding(self, question: QuestionBase) -> QuestionEmbedding:
         """Crea un embedding para una pregunta."""
         return await generate_question_embedding(question, self.max_retries, self.wait_seconds)
-    

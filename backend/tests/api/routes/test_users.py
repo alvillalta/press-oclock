@@ -493,7 +493,7 @@ def test_delete_user_cleans_mail_sources_and_chunks(
             ChunkCreate(
                 content="A chunk to delete.",
                 position=1,
-                embedding=[0.0] * 1536,
+                embedding=[0.0] * settings.EMBEDDING_DIMENSIONS,
             )
         ],
     )

@@ -32,8 +32,8 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
 def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:
     user_data = user_in.model_dump(exclude_unset=True)
     extra_data = {}
-    if "password" in user_data:
-        password = user_data["password"]
+    password = user_data.pop("password", None)
+    if password is not None:
         hashed_password = get_password_hash(password)
         extra_data["hashed_password"] = hashed_password
     db_user.sqlmodel_update(user_data, update=extra_data)
@@ -72,8 +72,15 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
     return db_user
 
 
+def create_source(*, session: Session, origin: str, user_id: UUID) -> Source:
+    """Create a source owned by a user without committing the transaction."""
+    db_source = Source(origin=origin, user_id=user_id)
+    session.add(db_source)
+    return db_source
+
+
 def create_mail(*, session: Session, mail_in: MailCreate, user_id: UUID) -> Mail:
-    db_source = Source(origin="mail")
+    db_source = create_source(session=session, origin="mail", user_id=user_id)
     db_mail = Mail.model_validate(
         mail_in,
         update={"user_id": user_id, "source_id": db_source.id},

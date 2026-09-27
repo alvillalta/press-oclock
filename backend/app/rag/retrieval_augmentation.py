@@ -6,9 +6,8 @@ from sqlmodel import Session, and_, col, or_, select
 
 from app.core.logging import get_logger
 from app.models import (
-    AugmentedSourceChunksGroup,
+    AugmentedChunksGroup,
     Chunk,
-    Mail,
     QuestionEmbedding,
     Source,
 )
@@ -23,22 +22,21 @@ def retrieve_chunks(
     chunks_limit: int,
 ) -> list[Chunk]:
     """
-    Return the closest mail chunks belonging to the requested query.
+    Recupera los chunks más similares de las fuentes que pertenecen al usuario.
     """
     logger.info("Retrieving similar chunks from the data base")
     
     query = (
         select(Chunk)
         .join(Source, col(Chunk.source_id) == col(Source.id))
-        .join(Mail, col(Mail.source_id) == col(Source.id))
-        .where(col(Mail.user_id) == user_id)
-        .where(col(Source.origin) == "mail")
+        .where(col(Source.user_id) == user_id)
         .order_by(col(Chunk.embedding).op("<=>")(embedded_question))
         .limit(chunks_limit)
     )
     return list(session.exec(query).all())
 
 
+# Lista de tuplas
 ChunkPositionWindows: TypeAlias = list[
     tuple[
         UUID,  # SourceId
@@ -51,9 +49,9 @@ def merge_windows(
     chunk_position_windows: ChunkPositionWindows,
 ) -> ChunkPositionWindows:
     """
-    Merge overlapping chunk-position windows belonging to the same source.
+    Fusiona las posiciones de chunks de una misma fuente que se solapan.
     """
-    logger.info("Excluding overlaping chunk position windows")
+    logger.info("Merging overlaping chunk position windows")
 
     if not chunk_position_windows:
         return []
@@ -85,63 +83,49 @@ def merge_windows(
     return merged_windows
 
 
+# Lista de tuplas de Chunks aumentados y su Source asociada
 AugmentedList: TypeAlias = list[
     tuple[
-        Chunk, 
+        Chunk,
         Source,
-        Mail
     ]
 ]
 
+# Diccionario de clave tupla y valor diccionario
 ChunkWindowRetrieval: TypeAlias = dict[
-    # CLAVE: (MailId, ChunkPosition) -> VALOR: Chunk
+    # CLAVE: (SourceId, ChunkPosition) -> VALOR: Instancia de Chunk
     tuple[
-        UUID,  # MailId
+        UUID,  # SourceId
         int  # ChunkPosition
-    ], 
+    ],
     Chunk
-]
-
-SourceMetadata: TypeAlias = dict[
-    UUID, 
-    tuple[
-        str,
-        UUID,
-        str | None,
-        str,
-        datetime
-    ]
 ]
 
 def group_chunks(
     augmented_list: AugmentedList,
     chunk_position_windows: ChunkPositionWindows,
-) -> list[AugmentedSourceChunksGroup]:
+) -> list[AugmentedChunksGroup]:
     """
-    Devuelve grupos de chunks contiguos por cada chunk similar manteniendo el orden por position dentro de cada grupo.
+    Devuelve grupos de instancias de chunks contiguos según la fuente.
     """
-    logger.info("Grouping contiguous similar chunks while maintaining their position")
+    logger.info("Grouping contiguous chunk instances")
     
     by_source_and_position: ChunkWindowRetrieval = {}
-    source_metadata: SourceMetadata = {}
+    sources_by_id: dict[UUID, Source] = {}
+    # CLAVE: SourceId -> VALOR: Instancia de Source
 
-    for chunk, source, mail in augmented_list:
+    for chunk, source in augmented_list:
         source_id = chunk.source_id
+        # Recupera el chunk a partir de la ventana que se le dé sin recorrer la lista O(1)
         by_source_and_position[(source_id, chunk.position)] = chunk
-        source_metadata.setdefault(
-            source_id,
-            (
-                source.origin,
-                mail.id,
-                mail.subject,
-                mail.sender,
-                mail.received_at,
-            ),
-        )
+        # Mete source_id como clave del diccionario asignando su correspondiente instancia de Source
+        sources_by_id[source_id] = source
 
-    grouped_chunks: list[AugmentedSourceChunksGroup] = []
+    grouped_chunks: list[AugmentedChunksGroup] = []
+    # Primer bucle para recorrer las tuplas de las ventanas
     for source_id, start, end in chunk_position_windows:
         chunks_group: list[Chunk] = []
+        # Segundo bucle anidado para recorrer los chunks contiguos de UNA ventana
         for position in range(start, end + 1):
             chunk_at_position = by_source_and_position.get((source_id, position))
             if chunk_at_position is not None:
@@ -149,15 +133,17 @@ def group_chunks(
         if not chunks_group:
             continue
 
-        origin, mail_id, subject, sender, received_at = source_metadata[source_id]
+        # Recupera la instancia de Source DENTRO DEL PRIMER BUCLE para acceder a su "origin"
+        grouped_source = sources_by_id.get(source_id)
+        if grouped_source is None:
+            continue
+
+        # Añade el grupo a list[AugmentedSourceGroup] DENTRO DEL PRIMER BUCLE
         grouped_chunks.append(
             {
                 "source_id": source_id,
-                "origin": origin,
-                "mail_id": mail_id,
-                "subject": subject,
-                "sender": sender,
-                "received_at": received_at,
+                "origin": grouped_source.origin,
+                "details": {},
                 "chunk_list": chunks_group,
             }
         )
@@ -170,12 +156,13 @@ def augment_chunks(
     similar_chunks: list[Chunk],
     user_id: UUID,
     chunks_range: int,
-) -> list[AugmentedSourceChunksGroup]:
+) -> list[AugmentedChunksGroup]:
     """
-    Load neighboring chunks and mail metadata for each matching source.
+    Recupera las instancias aumentadas de los chunks similares que se le proporcionan.
     """
-    logger.info("Grouping contiguous similar chunks while maintaining their position")
+    logger.info("Querying the database for augmented instances of the similar chunks.")
 
+    # Sin esta comprobación la consulta a la db traería todos los chunks del usuario por el or_ vacío
     if not similar_chunks:
         return []
 
@@ -199,41 +186,56 @@ def augment_chunks(
     ]
 
     query = (
-        select(Chunk, Source, Mail)
+        select(Chunk, Source)
         .join(Source, col(Chunk.source_id) == col(Source.id))
-        .join(Mail, col(Mail.source_id) == col(Source.id))
-        .where(col(Mail.user_id) == user_id)
-        .where(col(Source.origin) == "mail")
-        .where(or_(*conditions))
+        .where(col(Source.user_id) == user_id)
+        .where(or_(*conditions))  # or_ permite evaluar las condiciones de todas las ventanas de chunk_index y * desempaqueta la lista de condiciones.
         .order_by(col(Chunk.source_id), col(Chunk.position))
     )
     augmented_list: AugmentedList = list(session.exec(query).all())
     return group_chunks(augmented_list, chunk_position_windows)
 
 
-def merge_chunks(augmented_chunks: list[AugmentedSourceChunksGroup]) -> str:
-    """Build a language-model context from mail chunks and their metadata."""
+def create_context(augmented_chunks: list[AugmentedChunksGroup]) -> str:
+    """
+    Crea la parte variable del prompt para el modelo de IA generativa.
+    """
+    logger.info("Creating the prompt context from chunk groups and their specific metadata")
+
     source_blocks = []
     for grouped_source_chunks in augmented_chunks:
+        # Une los textos de los chunks y separa cada grupo con un salto de línea
         joined_chunks = "\n".join(
             chunk.content for chunk in grouped_source_chunks["chunk_list"]
         )
+        details = []
+        # Bucle para recorrer las parejas CLAVE-VALOR gracias al método items(), donde el valor son metadatos específicos de la fuente en función del origen
+        for details_key, details_value in grouped_source_chunks["details"].items():
+            if details_value is None:
+                rendered_value = "(sin datos)"
+            elif isinstance(details_value, datetime):
+                rendered_value = details_value.isoformat()
+            else:
+                rendered_value = str(details_value)
+            details.append(f"{details_key.replace('_', ' ').title()}: {rendered_value}")
+
+        details_block = "\n".join(details)
+        if details_block:
+            details_block = f"{details_block}\n"
+
         source_blocks.append(
-            "\nCORREO\n"
+            "\nFUENTE\n"
             f"Source ID: {grouped_source_chunks['source_id']}\n"
             f"Origin: {grouped_source_chunks['origin']}\n"
-            f"ID: {grouped_source_chunks['mail_id']}\n"
-            f"Subject: {grouped_source_chunks['subject'] or '(sin asunto)'}\n"
-            f"Sender: {grouped_source_chunks['sender']}\n"
-            f"Received at: {grouped_source_chunks['received_at'].isoformat()}\n"
-            f"Body: {joined_chunks}"
+            f"{details_block}"
+            f"Content: {joined_chunks}"
         )
 
     return "\n---\n".join(source_blocks)
 
 
 class RetrievalAugmentationService:
-    """Retrieve similar chunks and augment them with adjacent mail content."""
+    """Retrieve similar chunks and augment them with adjacent source content."""
 
     def __init__(self, chunks_limit: int = 3, chunks_range: int = 1):
         self.chunks_limit = chunks_limit
@@ -249,15 +251,15 @@ class RetrievalAugmentationService:
             session, embedded_question, user_id, self.chunks_limit
         )
 
-    def expand_information(
+    def augment_chunk_groups(
         self,
         session: Session,
         similar_chunks: list[Chunk],
         user_id: UUID,
-    ) -> list[AugmentedSourceChunksGroup]:
+    ) -> list[AugmentedChunksGroup]:
         return augment_chunks(session, similar_chunks, user_id, self.chunks_range)
 
-    def build_context(
-        self, augmented_chunks: list[AugmentedSourceChunksGroup]
+    def build_prompt_context(
+        self, augmented_chunks: list[AugmentedChunksGroup]
     ) -> str:
-        return merge_chunks(augmented_chunks)
+        return create_context(augmented_chunks)

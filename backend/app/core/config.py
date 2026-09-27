@@ -103,6 +103,7 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str
     EMBEDDING_MODEL: str
+    EMBEDDING_DIMENSIONS: int
     GENERATION_MODEL: str
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
