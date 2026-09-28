@@ -45,6 +45,7 @@ class RagService:
             raise ValueError("No answer generated for the question")
 
         sources = get_sources(similar_chunks, augmented_chunks)
+        # Conversión de modelos SQL en JSON para poder persistirlos
         serialized_sources = [source.model_dump(mode="json") for source in sources]
         
         question = QuestionCreate(

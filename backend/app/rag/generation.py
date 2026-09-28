@@ -10,14 +10,23 @@ client = get_openai_client()
 
 
 def build_messages(question: str, context: str) -> list[ChatCompletionMessageParam]:
+    """
+    Construye el prompt final para el modelo de IA generativa.
+    """
+    logger.info("Creating the final prompt for the generative AI Model")
+    
     system_prompt = """
-        Eres un asistente experto.
+        Eres un asistente especializado en responder preguntas a partir de información recuperada mediante un sistema RAG.
 
-        Responde únicamente utilizando la información
-        proporcionada en el contexto.
+        Tu tarea es responder a la pregunta del usuario utilizando únicamente la información proporcionada en el contexto recuperado.
 
-        Si la respuesta no aparece en el contexto,
-        indica que no dispones de información suficiente.
+        REGLAS:
+
+        - Utiliza exclusivamente la información presente en el contexto. No utilices conocimientos externos ni inventes información.
+        - Si la información del contexto es insuficiente para responder con seguridad, indícalo explícitamente. No inventes nada.
+        - Si el contexto contiene información contradictoria, indícalo y atribuye cada afirmación a su fuente cuando sea posible.
+        - Responde de forma clara y concisa, adaptando el nivel de detalle a la pregunta.
+        - No menciones el funcionamiento interno del sistema RAG.
     """
 
     user_prompt = f"""
@@ -38,6 +47,11 @@ def build_messages(question: str, context: str) -> list[ChatCompletionMessagePar
 
 
 async def ask_question(question: QuestionBase, context: str) -> str:
+    """
+    Generación de la respuesta.
+    """
+    logger.info("Generating answer")
+
     messages = build_messages(question, context)
     response = await client.chat.completions.create(
         model=settings.GENERATION_MODEL,
@@ -47,7 +61,7 @@ async def ask_question(question: QuestionBase, context: str) -> str:
 
 
 class GenerationService:
-    """Servicio para generar respuestas utilizando el modelo RAG."""
+    """Servicio para generar la respuesta."""
 
     async def generate_answer(self, question_in: str, context: str) -> str:
         return await ask_question(question_in, context)
