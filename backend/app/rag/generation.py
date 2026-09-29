@@ -1,12 +1,62 @@
+from datetime import datetime
+
+from openai.types.chat import (
+    ChatCompletionMessageParam,  # Formato de salida de la API de OpenAI
+)
+
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.openai_client import get_openai_client
-from app.models import QuestionBase
-from openai.types.chat import ChatCompletionMessageParam  # Formato de salida de la API de OpenAI
+from app.models import AugmentedChunksGroup, QuestionBase
 
 logger = get_logger(__name__)
 
 client = get_openai_client()
+
+
+def create_context(augmented_chunks: list[AugmentedChunksGroup]) -> str:
+    """
+    Crea la parte variable del prompt para el modelo de IA generativa.
+    """
+    logger.info(
+        "Creating the prompt context from chunk groups and their specific metadata"
+    )
+
+    source_blocks: list[str] = []
+    for grouped_source_chunks in augmented_chunks:
+        # Añade un número por cada iteración para enumerar la fuente en el prompt de abajo
+        source_number = len(source_blocks) + 1
+
+        # Une los textos de los chunks
+        joined_chunks = "\n".join(
+            chunk.content for chunk in grouped_source_chunks["chunk_list"]
+        )
+
+        # details se reinicia vacío cada vez que termina el bucle
+        details = []
+        # Bucle para recorrer las parejas CLAVE-VALOR de los distintos diccionarios details
+        for details_key, details_value in grouped_source_chunks["details"].items():
+            if details_value is None:
+                rendered_value = "(sin datos)"
+            elif isinstance(details_value, datetime):
+                rendered_value = details_value.isoformat()
+            else:
+                rendered_value = str(details_value)
+            # Escribe el metadato en texto común legible
+            details.append(f"{details_key.replace('_', ' ').title()}: {rendered_value}")
+        # Une los textos de los metadatos
+        details_block = "\n".join(details)
+        if details_block:
+            details_block = f"{details_block}\n"
+
+        source_blocks.append(
+            f"\nFUENTE {source_number}\n"
+            f"Origin: {grouped_source_chunks['origin']}\n"
+            f"{details_block}"
+            f"Content: {joined_chunks}"
+        )
+
+    return "\n---\n".join(source_blocks)
 
 
 def build_messages(question: str, context: str) -> list[ChatCompletionMessageParam]:
@@ -14,7 +64,7 @@ def build_messages(question: str, context: str) -> list[ChatCompletionMessagePar
     Construye el prompt final para el modelo de IA generativa.
     """
     logger.info("Creating the final prompt for the generative AI Model")
-    
+
     system_prompt = """
         Eres un asistente especializado en responder preguntas a partir de información recuperada mediante un sistema RAG.
 
@@ -61,10 +111,14 @@ async def ask_question(question: QuestionBase, context: str) -> str:
 
 
 class GenerationService:
-    """Servicio para generar la respuesta."""
+    """Servicio para construir el contexto del prompt y generar la respuesta."""
 
-    async def generate_answer(self, question_in: str, context: str) -> str:
+    def build_prompt_context(self, augmented_chunks: list[AugmentedChunksGroup]) -> str:
+        return create_context(augmented_chunks)
+
+    async def generate_answer(
+        self, question_in: QuestionBase, augmented_chunks: list[AugmentedChunksGroup]
+    ) -> str:
+        # LLama aquí al otro método de la clase para pasar el contexto a texto plano
+        context = self.build_prompt_context(augmented_chunks)
         return await ask_question(question_in, context)
-
-    
-    

@@ -2,13 +2,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional, TypedDict
 
-from app.core.config import settings
 from pgvector.sqlalchemy import Vector
 from pydantic import EmailStr, StringConstraints
 from sqlalchemy import DateTime, Index, UniqueConstraint
 from sqlmodel import JSON, Field, Relationship, SQLModel
 
-
+from app.core.config import settings
 
 
 def get_datetime_utc() -> datetime:
@@ -59,7 +58,9 @@ class User(UserBase, table=True):
         sa_type=DateTime(timezone=True),  # type: ignore
     )
     mails: list["Mail"] = Relationship(back_populates="user", cascade_delete=True)
-    questions: list["Question"] = Relationship(back_populates="user", cascade_delete=True)
+    questions: list["Question"] = Relationship(
+        back_populates="user", cascade_delete=True
+    )
 
 
 # Properties to return via API, id is always required
@@ -97,9 +98,7 @@ class Source(SQLModel, table=True):
         back_populates="source",
     )
     chunks: list["Chunk"] = Relationship(back_populates="source", cascade_delete=True)
-    __table_args__ = (
-        Index("ix_source_user_origin", "user_id", "origin"),
-    )
+    __table_args__ = (Index("ix_source_user_origin", "user_id", "origin"),)
 
 
 # External Mail model
@@ -167,6 +166,7 @@ class Attachment(SQLModel, table=True):
         back_populates="attachment",
     )
 
+
 # Chunk shared properties
 class ChunkBase(SQLModel):
     content: str = Field(
@@ -217,14 +217,16 @@ class AugmentedChunksGroup(TypedDict):
 
 # Question shared properties
 QuestionBase = Annotated[
-        str,
-        StringConstraints(min_length=1, max_length=800, strip_whitespace=True)
+    str, StringConstraints(min_length=1, max_length=800, strip_whitespace=True)
 ]
 
 
 QuestionEmbedding = Annotated[
     list[float],
-    Field(min_length=settings.EMBEDDING_DIMENSIONS, max_length=settings.EMBEDDING_DIMENSIONS),
+    Field(
+        min_length=settings.EMBEDDING_DIMENSIONS,
+        max_length=settings.EMBEDDING_DIMENSIONS,
+    ),
 ]
 
 
@@ -241,7 +243,7 @@ class SourceCitation(SQLModel):
 class QuestionCreate(SQLModel):
     question: QuestionBase
     answer: str
-    sources: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
+    citations: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
 
 
 # Question database model
@@ -256,9 +258,11 @@ class Question(QuestionCreate, table=True):
         sa_type=DateTime(timezone=True),
     )
 
+
 # Generic message
 class Message(SQLModel):
     message: str
+
 
 """
 # Login request payload
@@ -266,6 +270,7 @@ class LoginRequest(SQLModel):
     email: EmailStr
     password: str
  """
+
 
 # JSON payload containing access token
 class Token(SQLModel):

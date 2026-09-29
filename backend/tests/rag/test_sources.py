@@ -5,14 +5,11 @@ from sqlmodel import Session, select
 
 from app import crud
 from app.core.config import settings
-from app.models import Chunk, ChunkCreate, Mail, Source
-from app.rag.retrieval_augmentation import (
-    augment_chunks,
-    group_chunks,
-    merge_windows,
-    retrieve_chunks,
-)
-from app.rag.sources import get_sources, load_source_details
+from app.models import Chunk, ChunkCreate, Mail, Question, Source
+from app.rag.augmentation import augment_chunks, group_chunks, merge_windows
+from app.rag.citations import CitationService
+from app.rag.metadata import MetadataService
+from app.rag.retrieval import retrieve_chunks
 from tests.utils.mail import create_random_mail
 from tests.utils.user import create_random_user
 
@@ -65,6 +62,7 @@ def test_citations_use_source_and_received_at_fields() -> None:
         [(chunk, source)],
         [(source_id, 1, 1)],
     )
+
     class FakeResult:
         def all(self) -> list[Mail]:
             return [mail]
@@ -77,12 +75,15 @@ def test_citations_use_source_and_received_at_fields() -> None:
             return FakeResult()
 
     session = FakeSession()
-    enriched_groups = load_source_details(
-        session=session, source_groups=grouped_chunks  # type: ignore[arg-type]
+    metadata_service = MetadataService()
+    enriched_groups = metadata_service.load_source_details(
+        session=session,
+        augmented_chunks=grouped_chunks,  # type: ignore[arg-type]
     )
     assert session.calls == 1
 
-    citations = get_sources([chunk], enriched_groups)
+    citation_service = CitationService()
+    citations = citation_service.get_citations_metadata([chunk], enriched_groups)
 
     assert len(citations) == 1
     citation = citations[0].model_dump(mode="json")
@@ -94,6 +95,20 @@ def test_citations_use_source_and_received_at_fields() -> None:
     )
     assert serialized_received_at == received_at
     assert citation["content"] == chunk.content
+
+
+def test_question_serializes_citations_without_sources() -> None:
+    question = Question(
+        question="¿Qué correos tengo?",
+        answer="Respuesta.",
+        citations=[{"source_id": str(uuid4())}],
+        user_id=uuid4(),
+    )
+
+    serialized = question.model_dump(mode="json")
+
+    assert "citations" in serialized
+    assert "sources" not in serialized
 
 
 def test_retrieval_and_expansion_are_scoped_to_source_owner(db: Session) -> None:

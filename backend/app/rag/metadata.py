@@ -5,12 +5,12 @@ from uuid import UUID
 from sqlmodel import Session, col, select
 
 from app.core.logging import get_logger
-from app.models import AugmentedChunksGroup, Chunk, Mail, SourceCitation
+from app.models import AugmentedChunksGroup, Mail
 
 logger = get_logger(__name__)
 
 SourceDetails = dict[str, Any]
-# Define la firma que para llamar a las funciones encargadas de los metadatos según origin
+# Callable define la firma para llamar a las funciones encargadas de los metadatos según origin
 SourceDetailsLoader = Callable[[Session, list[UUID]], dict[UUID, SourceDetails]]
 
 
@@ -39,13 +39,12 @@ SOURCE_DETAILS_LOADERS: dict[str, SourceDetailsLoader] = {
 }
 
 
-def load_source_details(
-    *,
+def get_metadata(
     session: Session,
     source_chunks_groups: list[AugmentedChunksGroup],
 ) -> list[AugmentedChunksGroup]:
     """
-    Carga los metadatos específicos de los ya seleccionados grupos de una fuente.
+    Carga los metadatos específicos de las fuentes de los grupos de chunks previamente seleccionados.
     """
     logger.info("Loading specific metadata from already selected sources")
 
@@ -81,34 +80,14 @@ def load_source_details(
     ]
 
 
-def get_sources(
-    similar_chunks: list[Chunk],
-    augmented_chunks: list[AugmentedChunksGroup],
-) -> list[SourceCitation]:
-    """
-    Crea citas utilizando los chunks originales recuperados y los metadatos asociados a la fuente.
-    """
-    logger.info("Creating source citations")
+class MetadataService:
+    """Carga los metadatos de las fuentes de los chunks"""
 
-    # Crea un diccionario con CLAVE: source_id -> VALOR: instancia de grupo de chunks
-    metadata_by_source_id = {
-        group["source_id"]: group for group in augmented_chunks
-    }
-    sources: list[SourceCitation] = []
+    def load_source_details(
+            self,
+            session: Session,
+            augmented_chunks: list[AugmentedChunksGroup]
+        ) -> list[AugmentedChunksGroup]:
+            return get_metadata(session, augmented_chunks)
 
-    for chunk in similar_chunks:
-        # Por cada chunk original recupera la instancia de grupo de chunks
-        source_chunks_group = metadata_by_source_id.get(chunk.source_id)
-        if source_chunks_group is None:
-            continue
 
-        sources.append(
-            SourceCitation(
-                source_id=chunk.source_id,
-                origin=source_chunks_group["origin"],
-                content=chunk.content,
-                details=source_chunks_group["details"],
-            )
-        )
-
-    return sources
