@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeAlias
 from uuid import UUID
 
 from sqlmodel import Session, col, select
@@ -9,9 +9,10 @@ from app.models import AugmentedChunksGroup, Mail
 
 logger = get_logger(__name__)
 
-SourceDetails = dict[str, Any]
+# Hacer TypedDict por cada fuente añadiría complejidad innecesaria
+SourceDetails: TypeAlias = dict[str, Any]
 # Callable define la firma para llamar a las funciones encargadas de los metadatos según origin
-SourceDetailsLoader = Callable[[Session, list[UUID]], dict[UUID, SourceDetails]]
+SourceDetailsLoader: TypeAlias = Callable[[Session, list[UUID]], dict[UUID, SourceDetails]]
 
 
 def _load_mail_details(
@@ -41,7 +42,7 @@ SOURCE_DETAILS_LOADERS: dict[str, SourceDetailsLoader] = {
 
 def get_metadata(
     session: Session,
-    source_chunks_groups: list[AugmentedChunksGroup],
+    augmented_chunk_groups: list[AugmentedChunksGroup],
 ) -> list[AugmentedChunksGroup]:
     """
     Carga los metadatos específicos de las fuentes de los grupos de chunks previamente seleccionados.
@@ -51,7 +52,7 @@ def get_metadata(
     # Crea un diccionario con CLAVE: origin -> VALOR: lista de source_id que pertenecen a ese origin
     source_ids_by_origin: dict[str, list[UUID]] = {}
 
-    for group in source_chunks_groups:
+    for group in augmented_chunk_groups:
         origin = group["origin"]
 
         if origin not in source_ids_by_origin:
@@ -73,10 +74,10 @@ def get_metadata(
     # Para cada grupo crea un diccionario nuevo que conserva sus campos originales y añade el diccionario específico de details. Si no encontró metadatos para ese ID, usa {}
     return [
         {
-            **group,
+            **group,  # **group desempaqueta todos los datos originales para copiarlos al nuevo diccionario 
             "details": details_by_source_id.get(group["source_id"], {}),
         }
-        for group in source_chunks_groups
+        for group in augmented_chunk_groups
     ]
 
 
@@ -86,8 +87,8 @@ class MetadataService:
     def load_source_details(
             self,
             session: Session,
-            augmented_chunks: list[AugmentedChunksGroup]
+            augmented_chunk_groups: list[AugmentedChunksGroup]
         ) -> list[AugmentedChunksGroup]:
-            return get_metadata(session, augmented_chunks)
+            return get_metadata(session, augmented_chunk_groups)
 
 

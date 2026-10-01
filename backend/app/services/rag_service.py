@@ -7,7 +7,7 @@ from app.crud import create_question
 from app.models import Question, QuestionBase, QuestionCreate
 from app.rag.augmentation import AugmentationService
 from app.rag.citations import CitationService
-from app.rag.embeddings import EmbeddingService
+from app.rag.embedding import EmbeddingService
 from app.rag.generation import GenerationService
 from app.rag.metadata import MetadataService
 from app.rag.retrieval import RetrievalService
@@ -42,22 +42,22 @@ class RagService:
             raise ValueError("No similar chunks found for current user")
 
         augmentation_service = AugmentationService()
-        augmented_chunks = augmentation_service.create_chunk_groups(
+        augmented_chunk_groups = augmentation_service.create_chunk_groups(
             session=self.session, similar_chunks=similar_chunks, user_id=user_id
         )
 
         metadata_service = MetadataService()
-        augmented_chunks = metadata_service.load_source_details(
-            session=self.session, augmented_chunks=augmented_chunks
+        augmented_chunk_groups = metadata_service.load_source_details(
+            session=self.session, augmented_chunk_groups=augmented_chunk_groups
         )
 
         generation_service = GenerationService()
-        answer = await generation_service.generate_answer(question_in, augmented_chunks)
+        answer = await generation_service.generate_answer(question_in, augmented_chunk_groups)
         if not answer:
             raise ValueError("No answer generated for the question")
 
         citation_service = CitationService()
-        citations = citation_service.get_citations_metadata(similar_chunks, augmented_chunks)
+        citations = citation_service.get_citations_metadata(similar_chunks, augmented_chunk_groups)
         # Conversión de modelos SQL en JSON para poder persistirlos
         serialized_citations = [
             citation.model_dump(mode="json") for citation in citations

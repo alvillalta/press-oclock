@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 client = get_openai_client()
 
 
-def create_context(augmented_chunks: list[AugmentedChunksGroup]) -> str:
+def create_context(augmented_chunk_groups: list[AugmentedChunksGroup]) -> str:
     """
     Crea la parte variable del prompt para el modelo de IA generativa.
     """
@@ -23,7 +23,7 @@ def create_context(augmented_chunks: list[AugmentedChunksGroup]) -> str:
     )
 
     source_blocks: list[str] = []
-    for grouped_source_chunks in augmented_chunks:
+    for grouped_source_chunks in augmented_chunk_groups:
         # Añade un número por cada iteración para enumerar la fuente en el prompt de abajo
         source_number = len(source_blocks) + 1
 
@@ -59,7 +59,7 @@ def create_context(augmented_chunks: list[AugmentedChunksGroup]) -> str:
     return "\n---\n".join(source_blocks)
 
 
-def build_messages(question: str, context: str) -> list[ChatCompletionMessageParam]:
+def build_messages(question: str, prompt_context: str) -> list[ChatCompletionMessageParam]:
     """
     Construye el prompt final para el modelo de IA generativa.
     """
@@ -82,7 +82,7 @@ def build_messages(question: str, context: str) -> list[ChatCompletionMessagePar
     user_prompt = f"""
         CONTEXTO:
 
-        {context}
+        {prompt_context}
 
         PREGUNTA:
 
@@ -96,13 +96,13 @@ def build_messages(question: str, context: str) -> list[ChatCompletionMessagePar
     ]
 
 
-async def ask_question(question: QuestionBase, context: str) -> str:
+async def ask_question(question: QuestionBase, prompt_context: str) -> str:
     """
     Generación de la respuesta.
     """
     logger.info("Generating answer")
 
-    messages = build_messages(question, context)
+    messages = build_messages(question, prompt_context)
     response = await client.chat.completions.create(
         model=settings.GENERATION_MODEL,
         messages=messages,
@@ -113,12 +113,12 @@ async def ask_question(question: QuestionBase, context: str) -> str:
 class GenerationService:
     """Servicio para construir el contexto del prompt y generar la respuesta."""
 
-    def build_prompt_context(self, augmented_chunks: list[AugmentedChunksGroup]) -> str:
-        return create_context(augmented_chunks)
+    def build_prompt_context(self, augmented_chunk_groups: list[AugmentedChunksGroup]) -> str:
+        return create_context(augmented_chunk_groups)
 
     async def generate_answer(
-        self, question_in: QuestionBase, augmented_chunks: list[AugmentedChunksGroup]
+        self, question_in: QuestionBase, augmented_chunk_groups: list[AugmentedChunksGroup]
     ) -> str:
-        # LLama aquí al otro método de la clase para pasar el contexto a texto plano
-        context = self.build_prompt_context(augmented_chunks)
-        return await ask_question(question_in, context)
+        # Orquesta aquí otro método de la clase para pasar el contexto a texto plano
+        prompt_context = self.build_prompt_context(augmented_chunk_groups)
+        return await ask_question(question_in, prompt_context)

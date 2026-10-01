@@ -13,7 +13,10 @@ client = get_openai_client()
 
 def validate_embedding_dimensions(embedding: list[float]) -> list[float]:
     if len(embedding) != settings.EMBEDDING_DIMENSIONS:
-        raise ValueError("Expected an embedding with a different number of dimensions.")
+        raise ValueError(
+            f"Expected an embedding with {settings.EMBEDDING_DIMENSIONS} dimensions, "
+            f"got {len(embedding)}."
+        )
     return embedding
 
 

@@ -77,8 +77,8 @@ def test_citations_use_source_and_received_at_fields() -> None:
     session = FakeSession()
     metadata_service = MetadataService()
     enriched_groups = metadata_service.load_source_details(
-        session=session,
-        augmented_chunks=grouped_chunks,  # type: ignore[arg-type]
+        session=session,  # type: ignore[arg-type]
+        augmented_chunk_groups=grouped_chunks,
     )
     assert session.calls == 1
 

@@ -7,7 +7,7 @@ from app import crud
 from app.api.deps import CurrentUser, MakeApiKeyDep, SessionDep
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.models import Mail, MailData, MailPublic, MailResponse, Message
+from app.models import Mail, MailCreate, MailPublic, MailResponse, Message
 from app.services.mail_service import MailService
 
 logger = get_logger(__name__)
@@ -57,7 +57,7 @@ def read_mail(
 
 @router.post("/", response_model=MailPublic)
 async def ingest_mail(
-    *, session: SessionDep, mail_data: MailData, _api_key: MakeApiKeyDep
+    *, session: SessionDep, mail_in: MailCreate, _api_key: MakeApiKeyDep
 ) -> Mail:
     """
     Ingesta de un correo y sus embeddings dentro del sistema.
@@ -65,10 +65,10 @@ async def ingest_mail(
     (de ahí user_id=settings.MAIL_WEBHOOK_USER_ID)
     """
     logger.info("Routing mail from external integrator")
-    
+
     mail_service = MailService(session=session)
     return await mail_service.process_mail(
-        mail_data=mail_data, user_id=settings.MAIL_WEBHOOK_USER_ID
+        mail_in=mail_in, user_id=settings.MAIL_WEBHOOK_USER_ID
     )
 
 

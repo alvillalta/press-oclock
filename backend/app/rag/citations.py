@@ -6,7 +6,7 @@ logger = get_logger(__name__)
 
 def get_citations(
         similar_chunks: list[Chunk],
-        augmented_chunks: list[AugmentedChunksGroup],
+        augmented_chunk_groups: list[AugmentedChunksGroup],
     ) -> list[SourceCitation]:
         """
         Crea citas utilizando los chunks originales recuperados y los metadatos asociados a la fuente.
@@ -15,7 +15,7 @@ def get_citations(
 
         # Crea un diccionario con CLAVE: source_id -> VALOR: instancia de grupo de chunks
         metadata_by_source_id = {
-            group["source_id"]: group for group in augmented_chunks
+            group["source_id"]: group for group in augmented_chunk_groups
         }
         citations: list[SourceCitation] = []
 
@@ -43,7 +43,7 @@ class CitationService:
     def get_citations_metadata(
             self,
             similar_chunks: list[Chunk],
-            augmented_chunks: list[AugmentedChunksGroup],
+            augmented_chunk_groups: list[AugmentedChunksGroup],
         ) -> list[SourceCitation]:
-            return get_citations(similar_chunks, augmented_chunks)
+            return get_citations(similar_chunks, augmented_chunk_groups)
 

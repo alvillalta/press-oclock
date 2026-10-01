@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app.core.config import settings
 from app.models import ChunkBase, ChunkCreate
-from app.rag import embeddings
+from app.rag import embedding
 
 
 def fake_openai_client(embedding: list[float]) -> Any:
@@ -33,7 +33,7 @@ def test_chunk_embedding_requires_configured_dimension() -> None:
 
 def test_embedding_response_validator_rejects_wrong_dimension() -> None:
     with pytest.raises(ValueError, match=f"{settings.EMBEDDING_DIMENSIONS} dimensions"):
-        embeddings.validate_embedding_dimensions([0.0] * (settings.EMBEDDING_DIMENSIONS + 1))
+        embedding.validate_embedding_dimensions([0.0] * (settings.EMBEDDING_DIMENSIONS + 1))
 
 
 @pytest.mark.anyio
@@ -41,13 +41,13 @@ async def test_question_embedding_response_dimension_is_validated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        embeddings,
+        embedding,
         "client",
         fake_openai_client([0.0] * (settings.EMBEDDING_DIMENSIONS - 1)),
     )
 
     with pytest.raises(ValueError, match=f"{settings.EMBEDDING_DIMENSIONS} dimensions"):
-        await embeddings.generate_question_embedding("Question", 1, 0)
+        await embedding.generate_question_embedding("Question", 1, 0)
 
 
 @pytest.mark.anyio
@@ -55,13 +55,13 @@ async def test_chunk_embedding_response_dimension_is_validated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        embeddings,
+        embedding,
         "client",
         fake_openai_client([0.0] * (settings.EMBEDDING_DIMENSIONS - 1)),
     )
 
     with pytest.raises(ValueError, match=f"{settings.EMBEDDING_DIMENSIONS} dimensions"):
-        await embeddings.generate_chunk_embeddings(
+        await embedding.generate_chunk_embeddings(
             chunks=[ChunkBase(content="Chunk", position=1)],
             batch_size=1,
             max_retries=1,

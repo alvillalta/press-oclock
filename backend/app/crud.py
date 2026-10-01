@@ -103,7 +103,7 @@ def create_chunks(
 
 
 def delete_mail(*, session: Session, mail_in: Mail) -> None:
-    """Delete a mail, its chunks and its mail-body source."""
+    """Borra un mail, sus chunks, y la source del que depende"""
     source_id = mail_in.source_id
     session.exec(delete(Chunk).where(col(Chunk.source_id) == source_id))
     session.delete(mail_in)
@@ -126,3 +126,8 @@ def create_question(*, session: Session, question_in: QuestionCreate, user_id: U
     session.commit()
     session.refresh(db_question)
     return db_question
+
+
+def delete_question(*, session: Session, question: Question) -> None:
+    session.delete(question)
+    session.flush()

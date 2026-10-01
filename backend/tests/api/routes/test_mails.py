@@ -18,7 +18,7 @@ def test_read_mails(
     mail = create_random_mail(db)
 
     response = client.get(
-        f"{settings.API_V1_STR}/mails/",
+        f"{settings.API_STR}/mails/",
         headers=superuser_token_headers,
     )
 
@@ -38,7 +38,7 @@ def test_read_mail_returns_original_body(
     mail = create_random_mail(db, body="The original body is retained.")
 
     response = client.get(
-        f"{settings.API_V1_STR}/mails/{mail.id}",
+        f"{settings.API_STR}/mails/{mail.id}",
         headers=superuser_token_headers,
     )
 
@@ -55,7 +55,7 @@ def test_read_mail_not_found(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     response = client.get(
-        f"{settings.API_V1_STR}/mails/{uuid.uuid4()}",
+        f"{settings.API_STR}/mails/{uuid.uuid4()}",
         headers=superuser_token_headers,
     )
 
@@ -69,7 +69,7 @@ def test_read_mail_not_enough_permissions(
     mail = create_random_mail(db)
 
     response = client.get(
-        f"{settings.API_V1_STR}/mails/{mail.id}",
+        f"{settings.API_STR}/mails/{mail.id}",
         headers=normal_user_token_headers,
     )
 
@@ -81,9 +81,11 @@ def test_delete_mail_deletes_its_source_and_chunks(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
     mail = create_random_mail(db)
+    mail_id = mail.id
+    source_id = mail.source_id
     crud.create_chunks(
         session=db,
-        source_id=mail.source_id,
+        source_id=source_id,
         chunks_in=[
             ChunkCreate(
                 content="A chunk to delete.",
@@ -94,16 +96,16 @@ def test_delete_mail_deletes_its_source_and_chunks(
     )
 
     response = client.delete(
-        f"{settings.API_V1_STR}/mails/{mail.id}",
+        f"{settings.API_STR}/mails/{mail_id}",
         headers=superuser_token_headers,
     )
 
     assert response.status_code == 200
     assert response.json()["message"] == "Mail deleted successfully"
     db.expire_all()
-    assert db.get(Mail, mail.id) is None
-    assert db.get(Source, mail.source_id) is None
-    assert db.exec(select(Chunk).where(Chunk.source_id == mail.source_id)).all() == []
+    assert db.get(Mail, mail_id) is None
+    assert db.get(Source, source_id) is None
+    assert db.exec(select(Chunk).where(Chunk.source_id == source_id)).all() == []
 
 
 class FakeEmbeddingService:
@@ -140,7 +142,7 @@ def test_ingest_mail_creates_source_and_chunks(
     }
 
     response = client.post(
-        f"{settings.API_V1_STR}/mails/",
+        f"{settings.API_STR}/mails/",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         json=data,
     )
@@ -187,7 +189,7 @@ def test_ingest_mail_without_body_does_not_create_chunks(
     }
 
     response = client.post(
-        f"{settings.API_V1_STR}/mails/",
+        f"{settings.API_STR}/mails/",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         json=data,
     )

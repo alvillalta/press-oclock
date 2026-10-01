@@ -4,7 +4,7 @@ from typing import Annotated, Any, Optional, TypedDict
 
 from pgvector.sqlalchemy import Vector
 from pydantic import EmailStr, StringConstraints
-from sqlalchemy import DateTime, Index, UniqueConstraint
+from sqlalchemy import DateTime, UniqueConstraint
 from sqlmodel import JSON, Field, Relationship, SQLModel
 
 from app.core.config import settings
@@ -14,7 +14,8 @@ def get_datetime_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# Shared properties
+# USER
+
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
@@ -22,7 +23,7 @@ class UserBase(SQLModel):
     full_name: str | None = Field(default=None, max_length=255)
 
 
-# Properties to receive via API on creation
+# Propiedades a recibir vía API
 class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=128)
 
@@ -33,9 +34,9 @@ class UserRegister(SQLModel):
     full_name: str | None = Field(default=None, max_length=255)
 
 
-# Fields accepted by the superuser update endpoint. Email is required, while omitted fields retain their current values.
+# Campos aceptados por el superusuario para poder editar un usuario (PATCH parcial)
 class UserUpdate(UserBase):
-    email: EmailStr = Field(unique=True, max_length=255)
+    email: EmailStr | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
@@ -49,8 +50,8 @@ class UpdatePassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
-# Database model, database table inferred from class name
 class User(UserBase, table=True):
+    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     created_at: datetime | None = Field(
@@ -63,7 +64,7 @@ class User(UserBase, table=True):
     )
 
 
-# Properties to return via API, id is always required
+# Propiedades a devolver vía API
 class UserPublic(UserBase):
     id: uuid.UUID
     created_at: datetime | None = None
@@ -74,45 +75,55 @@ class UsersPublic(SQLModel):
     count: int
 
 
-# Mail shared properties
+# SOURCE
+
+class Source(SQLModel, table=True):
+    """Database model"""
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    origin: str = Field(max_length=50, index=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+    # Mail y Attachment son opcionales porque la Source solo puede ser de un tipo de manera que el otro no estará
+    mail: Optional["Mail"] = Relationship(
+        back_populates="source",
+    )
+    attachment: Optional["Attachment"] = Relationship(
+        back_populates="source",
+    )
+    chunks: list["Chunk"] = Relationship(back_populates="source", cascade_delete=True)
+
+
+class SourceCitation(SQLModel):
+    source_id: uuid.UUID
+    origin: str
+    content: str = Field(
+        min_length=1,
+        max_length=800,
+    )
+    # Este diccionario se deja indicado porque es variable según mail, attachment, etc.
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+# MAIL
+
 class MailBase(SQLModel):
     subject: str | None = Field(default=None, max_length=255)
     sender: EmailStr = Field(max_length=255)
     received_at: datetime = Field(sa_type=DateTime(timezone=True))
 
 
-class Source(SQLModel, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    origin: str = Field(max_length=50, index=True)
-    user_id: uuid.UUID = Field(
-        foreign_key="user.id", nullable=False, ondelete="CASCADE"
-    )
-    created_at: datetime = Field(
-        default_factory=get_datetime_utc,
-        sa_type=DateTime(timezone=True),
-    )
-    mail: Optional["Mail"] = Relationship(  # noqa: UP045
-        back_populates="source",
-    )
-    attachment: Optional["Attachment"] = Relationship(  # noqa: UP045
-        back_populates="source",
-    )
-    chunks: list["Chunk"] = Relationship(back_populates="source", cascade_delete=True)
-    __table_args__ = (Index("ix_source_user_origin", "user_id", "origin"),)
-
-
-# External Mail model
-class MailData(MailBase):
-    body: str | None = Field(default=None)
-
-
-# Properties to receive on mail creation
+# Propiedades a recibir vía API
 class MailCreate(MailBase):
     body: str | None = Field(default=None)
 
 
-# Mail database model
 class Mail(MailBase, table=True):
+    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
@@ -134,6 +145,7 @@ class Mail(MailBase, table=True):
     )
 
 
+# Propiedades a devolver vía API
 class MailPublic(MailBase):
     id: uuid.UUID
     user_id: uuid.UUID
@@ -145,7 +157,10 @@ class MailResponse(MailPublic):
     body: str | None = None
 
 
+# ATTACHMENT
+
 class Attachment(SQLModel, table=True):
+    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     mail_id: uuid.UUID = Field(
         foreign_key="mail.id", nullable=False, ondelete="CASCADE"
@@ -167,7 +182,8 @@ class Attachment(SQLModel, table=True):
     )
 
 
-# Chunk shared properties
+# CHUNK
+
 class ChunkBase(SQLModel):
     content: str = Field(
         min_length=1,
@@ -184,7 +200,6 @@ class ChunkCreate(ChunkBase):
     )
 
 
-# Properties to receive on chunk update
 class ChunkUpdate(SQLModel):
     content: str = Field(
         min_length=1,
@@ -192,8 +207,8 @@ class ChunkUpdate(SQLModel):
     )
 
 
-# Chunk database model
 class Chunk(ChunkCreate, table=True):
+    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     source_id: uuid.UUID = Field(
         foreign_key="source.id", nullable=False, ondelete="CASCADE"
@@ -204,6 +219,7 @@ class Chunk(ChunkCreate, table=True):
         sa_type=DateTime(timezone=True),
     )
     __table_args__ = (
+        # Condición de refuerzo para que en una misma source no pueda haber dos chunks ocupando la misma posición
         UniqueConstraint("source_id", "position", name="uq_chunk_source_position"),
     )
 
@@ -215,7 +231,9 @@ class AugmentedChunksGroup(TypedDict):
     chunk_list: list[Chunk]
 
 
-# Question shared properties
+# QUESTION
+
+# Propiedades a recibir vía API
 QuestionBase = Annotated[
     str, StringConstraints(min_length=1, max_length=800, strip_whitespace=True)
 ]
@@ -230,24 +248,14 @@ QuestionEmbedding = Annotated[
 ]
 
 
-class SourceCitation(SQLModel):
-    source_id: uuid.UUID
-    origin: str
-    content: str = Field(
-        min_length=1,
-        max_length=800,
-    )
-    details: dict[str, Any] = Field(default_factory=dict)
-
-
 class QuestionCreate(SQLModel):
     question: QuestionBase
     answer: str
     citations: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
 
 
-# Question database model
 class Question(QuestionCreate, table=True):
+    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
@@ -259,17 +267,17 @@ class Question(QuestionCreate, table=True):
     )
 
 
-# Generic message
+# Propiedades a devolver vía API
+class QuestionPublic(QuestionCreate):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+
+
+# OTROS
+
 class Message(SQLModel):
     message: str
-
-
-"""
-# Login request payload
-class LoginRequest(SQLModel):
-    email: EmailStr
-    password: str
- """
 
 
 # JSON payload containing access token
