@@ -4,7 +4,7 @@
 
 This project is based on the [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template).
 
-### *THIS README BELONGS TO BRANCH press-oclock-v1
+---
 
 ## Index
 
@@ -103,52 +103,62 @@ press-oclock/
 │   │   ├── __init__.py
 │   │   ├── main.py                 # FastAPI application entry point
 │   │   ├── crud.py                 # Create, Read, Update, Delete operations
-│   │   ├── models.py               # SQLModel database models
+│   │   ├── models.py               # SQLModel models (User, Source, Mail, Attachment, Chunk, Question)
 │   │   ├── initial_data.py         # Database seeding logic
-│   │   ├── utils.py                # Utility functions
+│   │   ├── backend_pre_start.py    # Waits for the database before migrations
+│   │   ├── tests_pre_start.py      # Waits for the database before running tests
+│   │   ├── utils.py                # Utility functions (emails, tokens)
 │   │   │
 │   │   ├── api/
 │   │   │   ├── main.py             # Main API router
-│   │   │   ├── deps.py             # Dependency injection
-│   │   │   └── routes/             # Endpoint routes (items, users, etc.)
+│   │   │   ├── deps.py             # Dependency injection (auth, DB session, API key)
+│   │   │   └── routes/             # Endpoint routes
+│   │   │       ├── login.py
+│   │   │       ├── mails.py
+│   │   │       ├── private.py
+│   │   │       ├── questions.py
+│   │   │       ├── users.py
+│   │   │       └── utils.py
 │   │   │
 │   │   ├── core/
+│   │   │   ├── config.py           # Settings & environment variables
 │   │   │   ├── db.py               # Database connection & session management
 │   │   │   ├── logging.py          # Structured logging configuration
 │   │   │   ├── security.py         # JWT authentication & password hashing
-│   │   │   └── openai_client.py    # Optional: External API integrations
+│   │   │   └── openai_client.py    # OpenAI client integration
 │   │   │
 │   │   ├── services/
-│   │   │   ├── mail_service.py     # Email sending service
-│   │   │   ├── rag_service.py      # RAG (Retrieval-Augmented Generation)
-│   │   │   └── sync_service.py     # Data synchronization
+│   │   │   ├── mail_service.py     # Mail ingestion & embedding pipeline
+│   │   │   └── rag_service.py      # RAG (Retrieval-Augmented Generation)
 │   │   │
 │   │   ├── integrations/
-│   │   │   ├── email_provider.py   # Email provider abstraction
-│   │   │   └── gmail_provider.py   # Gmail-specific implementation
+│   │   │   └── email_provider.py   # Email provider abstraction
 │   │   │
 │   │   ├── rag/
 │   │   │   ├── chunking.py         # Text chunking for embeddings
-│   │   │   ├── embeddings.py       # Embedding generation
-│   │   │   ├── generation.py       # Generation logic
-│   │   │   ├── retrieval_augmentation.py
-│   │   │   └── sources.py          # Data source management
+│   │   │   ├── embedding.py        # Embedding generation
+│   │   │   ├── generation.py       # Answer generation logic
+│   │   │   ├── retrieval.py        # Similarity search for chunks
+│   │   │   ├── augmentation.py     # Contiguous chunk expansion
+│   │   │   ├── citations.py        # Citation building from sources
+│   │   │   └── metadata.py         # Source metadata aggregation
 │   │   │
 │   │   ├── email-templates/
 │   │   │   ├── src/                # Email template source files
 │   │   │   └── build/              # Compiled email templates
 │   │   │
-│   │   ├── alembic/                # Database migration scripts
-│   │   │   ├── env.py
-│   │   │   ├── versions/
-│   │   │   └── script.py.mako
-│   │   │
-│   │   └── tests/                  # Backend tests
-│   │       ├── api/
-│   │       ├── crud/
-│   │       ├── utils/
-│   │       ├── conftest.py         # Pytest configuration & fixtures
-│   │       └── scripts/
+│   │   └── alembic/                # Database migration scripts
+│   │       ├── env.py
+│   │       ├── versions/
+│   │       └── script.py.mako
+│   │
+│   ├── tests/
+│   │   ├── api/routes/             # Endpoint tests
+│   │   ├── crud/                   # CRUD tests
+│   │   ├── rag/                    # RAG pipeline tests
+│   │   ├── utils/                  # Test helpers
+│   │   ├── scripts/                # Test startup scripts
+│   │   └── conftest.py             # Pytest configuration & fixtures
 │   │
 │   ├── scripts/
 │   │   ├── format.sh               # Code formatting script
@@ -170,20 +180,27 @@ press-oclock/
 │   │   ├── routeTree.gen.ts        # Generated route definitions
 │   │   ├── vite-env.d.ts           # Vite environment types
 │   │   │
-│   │   ├── client/
-│   │   │   └── index.ts            # Auto-generated API client
+│   │   ├── client/                 # Auto-generated API client (OpenAPI)
+│   │   │   ├── core/
+│   │   │   ├── index.ts
+│   │   │   ├── sdk.gen.ts
+│   │   │   ├── types.gen.ts
+│   │   │   └── schemas.gen.ts
 │   │   │
 │   │   ├── components/             # Reusable React components
+│   │   │   ├── Admin/
+│   │   │   ├── Common/
+│   │   │   ├── Items/
+│   │   │   ├── Pending/
+│   │   │   ├── Sidebar/
+│   │   │   ├── UserSettings/
+│   │   │   └── ui/
 │   │   │
 │   │   ├── routes/                 # Route-based components
-│   │   │
 │   │   ├── hooks/                  # Custom React hooks
-│   │   │
 │   │   └── lib/                    # Shared utilities & helpers
 │   │
 │   ├── public/                     # Static assets
-│   │   └── assets/
-│   │       └── images/
 │   │
 │   ├── tests/
 │   │   ├── admin.spec.ts           # Admin feature tests
@@ -210,15 +227,19 @@ press-oclock/
 ├── scripts/
 │   ├── test-local.sh               # Local testing script
 │   ├── test.sh                     # Docker testing script
-│   └── generate-client.sh          # Generate TypeScript client
+│   ├── generate-client.sh          # Generate TypeScript client
+│   └── add_latest_release_date.py  # Release notes helper
 │
-├── docker-compose.yml              # Main compose configuration
-├── compose.yml                     # Alternative compose
+├── .github/workflows/              # CI/CD (tests, lint, deploy)
+│
+├── compose.yml                     # Base Docker Compose configuration
 ├── compose.override.yml            # Local development overrides
-├── compose.traefik.yml             # Traefik configuration
+├── compose.traefik.yml             # Traefik reverse proxy configuration
 │
+├── .env-example                    # Environment variables template
 ├── pyproject.toml                  # Root project configuration
 ├── package.json                    # Root Node.js configuration
+├── .pre-commit-config.yaml         # Pre-commit hooks
 ├── copier.yml                      # Project template configuration
 │
 ├── deployment.md                   # Deployment guide
@@ -317,79 +338,74 @@ docker-compose up --build
 
 ### 1. Backend Setup
 
-Navigate to `backend/` and create a `.env` file based on the template:
+All backend settings are read from a single `.env` file at the **repository root** (the backend loads `../.env`, one level above `backend/`). Start from the provided template:
+
+```bash
+cp .env-example .env
+```
 
 ```env
-# Database Configuration
-POSTGRES_SERVER=db
-POSTGRES_PORT=5432
-POSTGRES_DB=app
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=changeme
-DATABASE_URL=postgresql://postgres:changeme@localhost/app
+# Domain & environment
+DOMAIN=localhost
+FRONTEND_HOST=http://localhost:5173
+ENVIRONMENT=local                 # local | staging | production
+PROJECT_NAME="Press O'Clock"
+STACK_NAME=press-oclock-project
+BACKEND_CORS_ORIGINS=http://localhost,http://localhost:5173
 
-# FastAPI Configuration
-APP_NAME=Press O'Clock
-APP_VERSION=0.1.0
-DEBUG=true
+# Security
+SECRET_KEY=your_secret_key
+FIRST_SUPERUSER=admin@example.com
+FIRST_SUPERUSER_PASSWORD=your_first_superuser_password
 
-# API Configuration
-API_HOST=0.0.0.0
-API_PORT=8000
-
-# JWT Configuration
-JWT_SECRET_KEY=your-super-secret-key-change-this
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=30
-
-# CORS Configuration
-CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
-CORS_ALLOW_CREDENTIALS=true
-CORS_ALLOW_METHODS=["*"]
-CORS_ALLOW_HEADERS=["*"]
-
-# Logging Configuration
-LOG_LEVEL=INFO
-
-# Email Configuration (for password recovery)
-SMTP_HOST=localhost
-SMTP_PORT=1025  # Mailcatcher port
+# Email / SMTP (used for password recovery)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_TLS=True
+SMTP_SSL=False
 SMTP_USER=
 SMTP_PASSWORD=
-EMAILS_FROM_EMAIL=noreply@example.com
-EMAILS_FROM_NAME=Press O'Clock
+EMAILS_FROM_EMAIL=info@example.com
 
-# Backend URL (for frontend)
-BACKEND_URL=http://localhost:8000
+# Database (Postgres / Supabase)
+POSTGRES_SERVER=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_postgres_password
+# Optional: full DSN (postgresql+psycopg://user:pass@host:port/db) to use Supabase instead of local Postgres
+SUPABASE_DATABASE_URL=
+SENTRY_DSN=
 
-# Optional: External API Keys
-OPENAI_API_KEY=your_openai_api_key_here
+# Make.com webhook integration
+MAKE_API_KEY=your_make_api_key
+MAIL_WEBHOOK_USER_ID=
+
+# OpenAI models
+OPENAI_API_KEY=your_openai_api_key
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+GENERATION_MODEL=gpt-4o-mini
+
+# Docker images (used by Docker Compose)
+DOCKER_IMAGE_BACKEND=backend
+DOCKER_IMAGE_FRONTEND=frontend
 ```
+
+The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `OPENAI_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` and `GENERATION_MODEL`. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
 
 ### 2. Frontend Setup
 
-Navigate to `frontend/` and create a `.env` file:
+The frontend reads `VITE_API_URL` as the API **origin** — the generated client already appends the `/api` prefix:
 
 ```env
-# Backend API URL
-VITE_API_URL=http://localhost:8000/api/v1
+# frontend/.env
+VITE_API_URL=http://localhost:8000
 ```
 
-### 3. Update Docker Compose Variables
+### 3. Docker Compose
 
-Edit `compose.override.yml` for local development:
-
-```yaml
-services:
-  db:
-    environment:
-      - POSTGRES_PASSWORD=changeme
-
-  backend:
-    environment:
-      - DATABASE_URL=postgresql://postgres:changeme@db:5432/app
-      - JWT_SECRET_KEY=your-super-secret-key
-```
+Local development is wired through `compose.override.yml`, which publishes the service ports (`frontend:5173`, `backend:8000`, `adminer:8080`, `db:5432`, `mailcatcher:1080`) and routes outgoing email through Mailcatcher (`SMTP_HOST=mailcatcher`, `SMTP_PORT=1025`). Prefer adjusting values in the root `.env` over editing the compose files; `.env-example` is the reference for every supported variable.
 
 ---
 

@@ -75,6 +75,11 @@ services:
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
       - SENTRY_DSN=${SENTRY_DSN}
+      - MAKE_API_KEY=${MAKE_API_KEY?Variable not set}
+      - OPENAI_API_KEY=${OPENAI_API_KEY?Variable not set}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL?Variable not set}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS?Variable not set}
+      - GENERATION_MODEL=${GENERATION_MODEL?Variable not set}
 
   backend:
     image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
@@ -108,9 +113,14 @@ services:
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
       - SENTRY_DSN=${SENTRY_DSN}
+      - MAKE_API_KEY=${MAKE_API_KEY?Variable not set}
+      - OPENAI_API_KEY=${OPENAI_API_KEY?Variable not set}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL?Variable not set}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS?Variable not set}
+      - GENERATION_MODEL=${GENERATION_MODEL?Variable not set}
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/utils/health-check/"]
       interval: 10s
       timeout: 5s
       retries: 5

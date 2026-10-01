@@ -3,9 +3,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { z } from "zod"
 
-import { MailsService, type Question, QuestionsService } from "@/client"
+import { MailsService, type QuestionPublic, QuestionsService } from "@/client"
 
-type QuestionSource = {
+type QuestionCitation = {
   source_id: string
   origin: string
   content: string
@@ -48,7 +48,7 @@ function Dashboard() {
     mutationFn: (question: string) =>
       QuestionsService.createQuestion({ questionIn: question }),
     onSuccess: (createdQuestion) => {
-      queryClient.setQueryData<Question[]>(
+      queryClient.setQueryData<QuestionPublic[]>(
         ["questions"],
         (currentQuestions = []) => {
           const filteredQuestions = currentQuestions.filter(
@@ -80,6 +80,7 @@ function Dashboard() {
   }, [isProcessing])
 
   const displayedQuestion = selectedQuestion.data ?? mutation.data
+  const displayedQuestionId = displayedQuestion?.id
 
   useEffect(() => {
     if (selectedQuestion.data?.question) {
@@ -87,14 +88,14 @@ function Dashboard() {
     }
   }, [selectedQuestion.data])
 
-  const mappedSources = useMemo<QuestionSource[]>(() => {
-    const rawSources = displayedQuestion?.sources
-    if (!rawSources) {
+  const mappedCitations = useMemo<QuestionCitation[]>(() => {
+    const rawCitations = displayedQuestion?.citations
+    if (!rawCitations) {
       return []
     }
 
-    return rawSources.slice(0, 3).map((source) => {
-      const sourceRecord = source as Record<string, unknown>
+    return rawCitations.slice(0, 3).map((citation) => {
+      const sourceRecord = citation as Record<string, unknown>
       const rawDetails = sourceRecord.details
       const details =
         typeof rawDetails === "object" &&
@@ -155,6 +156,30 @@ function Dashboard() {
     }
   }, [resetToInitialLayout])
 
+  useEffect(() => {
+    const handleQuestionDeleted = (event: Event) => {
+      const deletedQuestionId = (event as CustomEvent<string>).detail
+      if (
+        deletedQuestionId !== displayedQuestionId &&
+        deletedQuestionId !== questionId
+      ) {
+        return
+      }
+
+      resetToInitialLayout()
+      void navigate({
+        to: "/",
+        search: { questionId: undefined },
+        replace: true,
+      })
+    }
+
+    window.addEventListener("question-deleted", handleQuestionDeleted)
+    return () => {
+      window.removeEventListener("question-deleted", handleQuestionDeleted)
+    }
+  }, [displayedQuestionId, navigate, questionId, resetToInitialLayout])
+
   const processingDots = ".".repeat(dotCount)
   const hasSubmittedQuestion = submittedQuestion !== null || Boolean(questionId)
   const displayedQuestionText =
@@ -169,7 +194,6 @@ function Dashboard() {
           </h1>
           <form onSubmit={handleSubmit} className="w-full max-w-2xl">
             <input
-              autoFocus
               type="text"
               value={questionInput}
               onChange={(event) => setQuestionInput(event.target.value)}
@@ -201,10 +225,10 @@ function Dashboard() {
                 {displayedQuestion.answer}
               </div>
 
-              {mappedSources.length > 0 && (
+              {mappedCitations.length > 0 && (
                 <div className="rounded-2xl border border-border bg-muted/40 p-4">
                   <div className="space-y-4">
-                    {mappedSources.map((source, index) => (
+                    {mappedCitations.map((source, index) => (
                       <button
                         type="button"
                         key={`${source.source_id}-${index}`}

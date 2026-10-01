@@ -71,7 +71,7 @@ export const HTTPValidationErrorSchema = {
     title: 'HTTPValidationError'
 } as const;
 
-export const MailDataSchema = {
+export const MailCreateSchema = {
     properties: {
         subject: {
             anyOf: [
@@ -110,7 +110,7 @@ export const MailDataSchema = {
     },
     type: 'object',
     required: ['sender', 'received_at'],
-    title: 'MailData'
+    title: 'MailCreate'
 } as const;
 
 export const MailPublicSchema = {
@@ -281,7 +281,7 @@ export const PrivateUserCreateSchema = {
     title: 'PrivateUserCreate'
 } as const;
 
-export const QuestionSchema = {
+export const QuestionPublicSchema = {
     properties: {
         question: {
             type: 'string',
@@ -293,13 +293,13 @@ export const QuestionSchema = {
             type: 'string',
             title: 'Answer'
         },
-        sources: {
+        citations: {
             items: {
                 additionalProperties: true,
                 type: 'object'
             },
             type: 'array',
-            title: 'Sources'
+            title: 'Citations'
         },
         id: {
             type: 'string',
@@ -318,8 +318,8 @@ export const QuestionSchema = {
         }
     },
     type: 'object',
-    required: ['question', 'answer', 'user_id'],
-    title: 'Question'
+    required: ['question', 'answer', 'id', 'user_id', 'created_at'],
+    title: 'QuestionPublic'
 } as const;
 
 export const TokenSchema = {
@@ -489,9 +489,16 @@ export const UserRegisterSchema = {
 export const UserUpdateSchema = {
     properties: {
         email: {
-            type: 'string',
-            maxLength: 255,
-            format: 'email',
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255,
+                    format: 'email'
+                },
+                {
+                    type: 'null'
+                }
+            ],
             title: 'Email'
         },
         is_active: {
@@ -531,7 +538,6 @@ export const UserUpdateSchema = {
         }
     },
     type: 'object',
-    required: ['email'],
     title: 'UserUpdate'
 } as const;
 
