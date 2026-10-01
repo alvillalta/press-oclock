@@ -13,7 +13,7 @@ export type HTTPValidationError = {
     detail?: Array<ValidationError>;
 };
 
-export type MailData = {
+export type MailCreate = {
     subject?: (string | null);
     sender: string;
     received_at: string;
@@ -57,15 +57,15 @@ export type PrivateUserCreate = {
     is_verified?: boolean;
 };
 
-export type Question = {
+export type QuestionPublic = {
     question: string;
     answer: string;
-    sources?: Array<{
+    citations?: Array<{
         [key: string]: unknown;
     }>;
-    id?: string;
+    id: string;
     user_id: string;
-    created_at?: string;
+    created_at: string;
 };
 
 export type Token = {
@@ -107,7 +107,7 @@ export type UsersPublic = {
 };
 
 export type UserUpdate = {
-    email: string;
+    email?: (string | null);
     is_active?: boolean;
     is_superuser?: boolean;
     full_name?: (string | null);
@@ -163,7 +163,7 @@ export type MailsReadMailsData = {
 export type MailsReadMailsResponse = (Array<MailPublic>);
 
 export type MailsIngestMailData = {
-    requestBody: MailData;
+    requestBody: MailCreate;
 };
 
 export type MailsIngestMailResponse = (MailPublic);
@@ -191,19 +191,19 @@ export type QuestionsReadQuestionsData = {
     skip?: number;
 };
 
-export type QuestionsReadQuestionsResponse = (Array<Question>);
+export type QuestionsReadQuestionsResponse = (Array<QuestionPublic>);
 
 export type QuestionsCreateQuestionData = {
     questionIn: string;
 };
 
-export type QuestionsCreateQuestionResponse = (Question);
+export type QuestionsCreateQuestionResponse = (QuestionPublic);
 
 export type QuestionsReadQuestionData = {
     id: string;
 };
 
-export type QuestionsReadQuestionResponse = (Question);
+export type QuestionsReadQuestionResponse = (QuestionPublic);
 
 export type QuestionsDeleteQuestionData = {
     id: string;

@@ -49,7 +49,10 @@ export function Main({ items }: MainProps) {
                   isActive={isActive}
                   asChild
                 >
-                  <RouterLink to={item.path} onClick={() => handleMenuClick(item.path)}>
+                  <RouterLink
+                    to={item.path}
+                    onClick={() => handleMenuClick(item.path)}
+                  >
                     <item.icon />
                     <span>{item.title}</span>
                   </RouterLink>

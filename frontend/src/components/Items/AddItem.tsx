@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
-import { type MailData, MailsService } from "@/client"
+import { type MailCreate, MailsService } from "@/client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -57,7 +57,7 @@ const AddItem = () => {
   })
 
   const mutation = useMutation({
-    mutationFn: (data: MailData) =>
+    mutationFn: (data: MailCreate) =>
       MailsService.ingestMail({ requestBody: data }),
     onSuccess: () => {
       showSuccessToast("Mail ingested successfully")

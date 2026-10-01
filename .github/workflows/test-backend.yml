@@ -15,6 +15,22 @@ jobs:
   test-backend:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      ENVIRONMENT: local
+      PROJECT_NAME: "Press O'Clock"
+      SECRET_KEY: test_secret_key_for_ci
+      FIRST_SUPERUSER: admin@example.com
+      FIRST_SUPERUSER_PASSWORD: test_superuser_password
+      POSTGRES_SERVER: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      MAKE_API_KEY: test_make_api_key
+      OPENAI_API_KEY: test_openai_api_key
+      EMBEDDING_MODEL: text-embedding-3-small
+      EMBEDDING_DIMENSIONS: "1536"
+      GENERATION_MODEL: gpt-4o-mini
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -30,6 +46,25 @@ jobs:
           # Before upgrading uv version, make sure astral-sh/setup-uv knows its checksum.
           # See: https://github.com/astral-sh/setup-uv/issues/851#issuecomment-4282017837
           version: "0.11.4"
+      - name: Create .env file
+        run: |
+          cat > .env <<EOF
+          ENVIRONMENT=${ENVIRONMENT}
+          PROJECT_NAME="${PROJECT_NAME}"
+          SECRET_KEY=${SECRET_KEY}
+          FIRST_SUPERUSER=${FIRST_SUPERUSER}
+          FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD}
+          POSTGRES_SERVER=${POSTGRES_SERVER}
+          POSTGRES_PORT=${POSTGRES_PORT}
+          POSTGRES_DB=${POSTGRES_DB}
+          POSTGRES_USER=${POSTGRES_USER}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          MAKE_API_KEY=${MAKE_API_KEY}
+          OPENAI_API_KEY=${OPENAI_API_KEY}
+          EMBEDDING_MODEL=${EMBEDDING_MODEL}
+          EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS}
+          GENERATION_MODEL=${GENERATION_MODEL}
+          EOF
       - run: docker compose down -v --remove-orphans
       - run: docker compose up -d db mailcatcher
       - name: Migrate DB

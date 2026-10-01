@@ -73,7 +73,9 @@ export function DataTable<TData, TValue>({
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
-                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                onClick={
+                  onRowClick ? () => onRowClick(row.original) : undefined
+                }
                 className={onRowClick ? "cursor-pointer" : undefined}
               >
                 {row.getVisibleCells().map((cell) => (

@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link as RouterLink } from "@tanstack/react-router"
 
-import { type Question, QuestionsService } from "@/client"
+import { type QuestionPublic, QuestionsService } from "@/client"
+import { DeleteQuestion } from "@/components/Sidebar/DeleteQuestion"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -56,7 +57,7 @@ export function RecentQuestions() {
       <SidebarGroupLabel>Recientes</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {sortedQuestions.map((question: Question, index) => {
+          {sortedQuestions.map((question: QuestionPublic, index) => {
             const itemKey = question.id ?? `${question.question}-${index}`
 
             return (
@@ -74,6 +75,7 @@ export function RecentQuestions() {
                     <span>{truncateQuestion(question.question)}</span>
                   </RouterLink>
                 </SidebarMenuButton>
+                {question.id && <DeleteQuestion id={question.id} />}
               </SidebarMenuItem>
             )
           })}
