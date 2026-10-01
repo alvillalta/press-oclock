@@ -1,7 +1,7 @@
 import { Eye } from "lucide-react"
 import { useState } from "react"
 
-import type { Mail } from "@/client"
+import type { MailPublic } from "@/client"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 
 interface EditItemProps {
-  item: Mail
+  item: MailPublic
   onSuccess: () => void
 }
 
@@ -37,18 +37,21 @@ const EditItem = ({ item, onSuccess }: EditItemProps) => {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Mail Details</DialogTitle>
-          <DialogDescription>Review sender, subject and date.</DialogDescription>
+          <DialogDescription>
+            Review sender, subject and received time.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 py-2 text-sm">
           <p>
             <span className="font-medium">Sender:</span> {item.sender}
           </p>
           <p>
-            <span className="font-medium">Subject:</span> {item.subject ?? "N/A"}
+            <span className="font-medium">Subject:</span>{" "}
+            {item.subject ?? "N/A"}
           </p>
           <p>
-            <span className="font-medium">Date:</span>{" "}
-            {new Date(item.date).toLocaleString()}
+            <span className="font-medium">Received at:</span>{" "}
+            {new Date(item.received_at).toLocaleString()}
           </p>
         </div>
       </DialogContent>

@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { Search } from "lucide-react"
 import { Suspense } from "react"
 
-import { type Mail, MailsService } from "@/client"
+import { type MailPublic, MailsService } from "@/client"
 import { DataTable } from "@/components/Common/DataTable"
 import AddItem from "@/components/Items/AddItem"
 import { columns } from "@/components/Items/columns"
@@ -26,7 +26,7 @@ function ItemsTableContent() {
   const { data: items } = useSuspenseQuery(getItemsQueryOptions())
   const navigate = useNavigate()
 
-  const handleRowClick = (mail: Mail) => {
+  const handleRowClick = (mail: MailPublic) => {
     if (!mail.id) {
       return
     }
@@ -41,12 +41,16 @@ function ItemsTableContent() {
           <Search className="h-8 w-8 text-muted-foreground" />
         </div>
         <h3 className="text-lg font-semibold">You don't have any mails yet</h3>
-        <p className="text-muted-foreground">Ingest a new mail to get started</p>
+        <p className="text-muted-foreground">
+          Ingest a new mail to get started
+        </p>
       </div>
     )
   }
 
-  return <DataTable columns={columns} data={items} onRowClick={handleRowClick} />
+  return (
+    <DataTable columns={columns} data={items} onRowClick={handleRowClick} />
+  )
 }
 
 function ItemsTable() {
@@ -63,7 +67,9 @@ function ItemsIndex() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Correos</h1>
-          <p className="text-muted-foreground">Gestiona tu bandeja de entrada</p>
+          <p className="text-muted-foreground">
+            Gestiona tu bandeja de entrada
+          </p>
         </div>
         <AddItem />
       </div>

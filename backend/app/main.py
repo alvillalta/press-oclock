@@ -16,11 +16,11 @@ if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    openapi_url=f"{settings.API_STR}/openapi.json",
     generate_unique_id_function=custom_generate_unique_id,
 )
 
-# Set all CORS enabled origins
+# CORS
 if settings.all_cors_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -30,4 +30,4 @@ if settings.all_cors_origins:
         allow_headers=["*"],
     )
 
-app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(api_router, prefix=settings.API_STR)

@@ -1,17 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { useNavigate } from "@tanstack/react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { z } from "zod"
 
 import { MailsService, type Question, QuestionsService } from "@/client"
 
 type QuestionSource = {
-  mail_id: string
-  chunk_text: string
-  sender: string
-  subject: string
-  date: string
+  source_id: string
+  origin: string
+  content: string
+  details: Record<string, unknown>
 }
 
 const dashboardSearchSchema = z.object({
@@ -34,7 +32,9 @@ function Dashboard() {
   const { questionId } = Route.useSearch()
   const navigate = useNavigate()
   const [questionInput, setQuestionInput] = useState("")
-  const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(null)
+  const [submittedQuestion, setSubmittedQuestion] = useState<string | null>(
+    null,
+  )
   const [dotCount, setDotCount] = useState(0)
   const queryClient = useQueryClient()
 
@@ -45,15 +45,19 @@ function Dashboard() {
   })
 
   const mutation = useMutation({
-    mutationFn: (question: string) => QuestionsService.createQuestion({ questionIn: question }),
+    mutationFn: (question: string) =>
+      QuestionsService.createQuestion({ questionIn: question }),
     onSuccess: (createdQuestion) => {
-      queryClient.setQueryData<Question[]>(["questions"], (currentQuestions = []) => {
-        const filteredQuestions = currentQuestions.filter(
-          (question) => question.id !== createdQuestion.id,
-        )
+      queryClient.setQueryData<Question[]>(
+        ["questions"],
+        (currentQuestions = []) => {
+          const filteredQuestions = currentQuestions.filter(
+            (question) => question.id !== createdQuestion.id,
+          )
 
-        return [createdQuestion, ...filteredQuestions]
-      })
+          return [createdQuestion, ...filteredQuestions]
+        },
+      )
       queryClient.invalidateQueries({ queryKey: ["questions"] })
     },
   })
@@ -91,12 +95,19 @@ function Dashboard() {
 
     return rawSources.slice(0, 3).map((source) => {
       const sourceRecord = source as Record<string, unknown>
+      const rawDetails = sourceRecord.details
+      const details =
+        typeof rawDetails === "object" &&
+        rawDetails !== null &&
+        !Array.isArray(rawDetails)
+          ? (rawDetails as Record<string, unknown>)
+          : {}
+
       return {
-        mail_id: String(sourceRecord.mail_id ?? ""),
-        chunk_text: String(sourceRecord.chunk_text ?? ""),
-        sender: String(sourceRecord.sender ?? ""),
-        subject: String(sourceRecord.subject ?? ""),
-        date: String(sourceRecord.date ?? ""),
+        source_id: String(sourceRecord.source_id ?? ""),
+        origin: String(sourceRecord.origin ?? ""),
+        content: String(sourceRecord.content ?? ""),
+        details,
       }
     })
   }, [displayedQuestion])
@@ -144,16 +155,10 @@ function Dashboard() {
     }
   }, [resetToInitialLayout])
 
-  const truncatedSubject = (subject: string) => {
-    if (subject.length <= 30) {
-      return subject
-    }
-    return `${subject.slice(0, 30)}...`
-  }
-
   const processingDots = ".".repeat(dotCount)
   const hasSubmittedQuestion = submittedQuestion !== null || Boolean(questionId)
-  const displayedQuestionText = submittedQuestion ?? selectedQuestion.data?.question ?? ""
+  const displayedQuestionText =
+    submittedQuestion ?? selectedQuestion.data?.question ?? ""
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -202,17 +207,29 @@ function Dashboard() {
                     {mappedSources.map((source, index) => (
                       <button
                         type="button"
-                        key={`${source.sender}-${source.date}-${index}`}
-                        onClick={() => handleSourceClick(source.mail_id)}
+                        key={`${source.source_id}-${index}`}
+                        disabled={source.origin !== "mail"}
+                        onClick={() => {
+                          if (source.origin === "mail") {
+                            void handleSourceClick(
+                              String(source.details.mail_id ?? ""),
+                            )
+                          }
+                        }}
                         className="w-full rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-muted/40"
                       >
                         <p className="text-sm leading-relaxed text-foreground sm:text-base">
-                          {source.chunk_text}
+                          {source.content}
                         </p>
                         <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                          <p>sender: {source.sender || "-"}</p>
-                          <p>subject: {truncatedSubject(source.subject || "-")}</p>
-                          <p>date: {source.date || "-"}</p>
+                          <p>origin: {source.origin || "-"}</p>
+                          {Object.entries(source.details)
+                            .filter(([key]) => key !== "mail_id")
+                            .map(([key, value]) => (
+                              <p key={key}>
+                                {key.replace(/_/g, " ")}: {String(value ?? "-")}
+                              </p>
+                            ))}
                         </div>
                       </button>
                     ))}

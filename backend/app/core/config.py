@@ -1,4 +1,3 @@
-import secrets
 import uuid
 import warnings
 from typing import Annotated, Any, Literal
@@ -25,19 +24,21 @@ def parse_cors(v: Any) -> list[str] | str:
 
 
 class Settings(BaseSettings):
+    # Aplicación, tokens, entorno y CORS
+    PROJECT_NAME: str
     model_config = SettingsConfigDict(
         # Use top level .env file (one level above ./backend/)
         env_file="../.env",
         env_ignore_empty=True,
         extra="ignore",
     )
-    API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
-    MAKE_API_KEY: str = secrets.token_urlsafe(32)
+    API_STR: str = "/api"
+    SECRET_KEY: str
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    SENTRY_DSN: HttpUrl | None = None
 
     BACKEND_CORS_ORIGINS: Annotated[
         list[AnyUrl] | str, BeforeValidator(parse_cors)
@@ -50,8 +51,7 @@ class Settings(BaseSettings):
             self.FRONTEND_HOST
         ]
 
-    PROJECT_NAME: str
-    SENTRY_DSN: HttpUrl | None = None
+    # Base de datos
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
             path=self.POSTGRES_DB,
         )
 
-    # Mail settings
+    # Correo SMTP
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
     SMTP_PORT: int = 587
@@ -90,7 +90,6 @@ class Settings(BaseSettings):
         return self
 
     EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
-    MAIL_WEBHOOK_USER_ID: uuid.UUID | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -98,13 +97,21 @@ class Settings(BaseSettings):
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
 
     EMAIL_TEST_USER: EmailStr = "test@example.com"
+
+    # Usuarios
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
+    # Integraciones externas
+    MAKE_API_KEY: str
+    MAIL_WEBHOOK_USER_ID: uuid.UUID | None = None
+
     OPENAI_API_KEY: str
     EMBEDDING_MODEL: str
+    EMBEDDING_DIMENSIONS: int
     GENERATION_MODEL: str
 
+    # Validaciones
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (

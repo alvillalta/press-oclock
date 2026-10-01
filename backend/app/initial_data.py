@@ -3,9 +3,10 @@ import logging
 from sqlmodel import Session
 
 from app.core.db import engine, init_db
+from app.core.logging import get_logger
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def init() -> None:

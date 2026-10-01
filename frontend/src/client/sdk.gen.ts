@@ -109,7 +109,7 @@ export class MailsService {
      * @param data The data for the request.
      * @param data.skip
      * @param data.limit
-     * @returns Mail Successful Response
+     * @returns MailPublic Successful Response
      * @throws ApiError
      */
     public static readMails(data: MailsReadMailsData = {}): CancelablePromise<MailsReadMailsResponse> {
@@ -131,7 +131,7 @@ export class MailsService {
      * Ingest a new mail with embeddings directly into the system.
      * @param data The data for the request.
      * @param data.requestBody
-     * @returns Mail Successful Response
+     * @returns MailPublic Successful Response
      * @throws ApiError
      */
     public static ingestMail(data: MailsIngestMailData): CancelablePromise<MailsIngestMailResponse> {
@@ -151,7 +151,7 @@ export class MailsService {
      * Get mail by ID.
      * @param data The data for the request.
      * @param data.id
-     * @returns Mail Successful Response
+     * @returns MailResponse Successful Response
      * @throws ApiError
      */
     public static readMail(data: MailsReadMailData): CancelablePromise<MailsReadMailResponse> {

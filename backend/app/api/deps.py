@@ -16,6 +16,7 @@ from app.models import TokenPayload, User
 bearer_scheme = HTTPBearer()
 api_key_header = APIKeyHeader(name="X-API-Key")
 
+
 def get_db() -> Generator[Session, None, None]:
     with Session(engine) as session:
         yield session

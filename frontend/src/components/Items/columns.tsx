@@ -1,10 +1,10 @@
 import type { ColumnDef } from "@tanstack/react-table"
 
-import type { Mail } from "@/client"
+import type { MailPublic } from "@/client"
 import { cn } from "@/lib/utils"
 import { ItemActionsMenu } from "./ItemActionsMenu"
 
-export const columns: ColumnDef<Mail>[] = [
+export const columns: ColumnDef<MailPublic>[] = [
   {
     accessorKey: "sender",
     header: "Sender",
@@ -30,11 +30,11 @@ export const columns: ColumnDef<Mail>[] = [
     },
   },
   {
-    accessorKey: "date",
-    header: "Date",
+    accessorKey: "received_at",
+    header: "Received",
     cell: ({ row }) => (
       <span className="text-muted-foreground">
-        {new Date(row.original.date).toLocaleString()}
+        {new Date(row.original.received_at).toLocaleString()}
       </span>
     ),
   },

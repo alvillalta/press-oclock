@@ -71,52 +71,6 @@ export const HTTPValidationErrorSchema = {
     title: 'HTTPValidationError'
 } as const;
 
-export const MailSchema = {
-    properties: {
-        subject: {
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 255
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Subject'
-        },
-        sender: {
-            type: 'string',
-            maxLength: 255,
-            format: 'email',
-            title: 'Sender'
-        },
-        date: {
-            type: 'string',
-            format: 'date-time',
-            title: 'Date'
-        },
-        id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'Id'
-        },
-        user_id: {
-            type: 'string',
-            format: 'uuid',
-            title: 'User Id'
-        },
-        created_at: {
-            type: 'string',
-            format: 'date-time',
-            title: 'Created At'
-        }
-    },
-    type: 'object',
-    required: ['sender', 'date', 'user_id'],
-    title: 'Mail'
-} as const;
-
 export const MailDataSchema = {
     properties: {
         subject: {
@@ -137,10 +91,10 @@ export const MailDataSchema = {
             format: 'email',
             title: 'Sender'
         },
-        date: {
+        received_at: {
             type: 'string',
             format: 'date-time',
-            title: 'Date'
+            title: 'Received At'
         },
         body: {
             anyOf: [
@@ -155,8 +109,121 @@ export const MailDataSchema = {
         }
     },
     type: 'object',
-    required: ['sender', 'date'],
+    required: ['sender', 'received_at'],
     title: 'MailData'
+} as const;
+
+export const MailPublicSchema = {
+    properties: {
+        subject: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Subject'
+        },
+        sender: {
+            type: 'string',
+            maxLength: 255,
+            format: 'email',
+            title: 'Sender'
+        },
+        received_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Received At'
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        user_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'User Id'
+        },
+        source_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Source Id'
+        },
+        created_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Created At'
+        }
+    },
+    type: 'object',
+    required: ['sender', 'received_at', 'id', 'user_id', 'source_id', 'created_at'],
+    title: 'MailPublic'
+} as const;
+
+export const MailResponseSchema = {
+    properties: {
+        subject: {
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 255
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Subject'
+        },
+        sender: {
+            type: 'string',
+            maxLength: 255,
+            format: 'email',
+            title: 'Sender'
+        },
+        received_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Received At'
+        },
+        id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Id'
+        },
+        user_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'User Id'
+        },
+        source_id: {
+            type: 'string',
+            format: 'uuid',
+            title: 'Source Id'
+        },
+        created_at: {
+            type: 'string',
+            format: 'date-time',
+            title: 'Created At'
+        },
+        body: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Body'
+        }
+    },
+    type: 'object',
+    required: ['sender', 'received_at', 'id', 'user_id', 'source_id', 'created_at'],
+    title: 'MailResponse'
 } as const;
 
 export const MessageSchema = {
@@ -450,14 +517,21 @@ export const UserUpdateSchema = {
             title: 'Full Name'
         },
         password: {
-            type: 'string',
-            maxLength: 128,
-            minLength: 8,
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 128,
+                    minLength: 8
+                },
+                {
+                    type: 'null'
+                }
+            ],
             title: 'Password'
         }
     },
     type: 'object',
-    required: ['email', 'password'],
+    required: ['email'],
     title: 'UserUpdate'
 } as const;
 

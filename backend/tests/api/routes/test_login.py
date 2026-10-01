@@ -18,7 +18,7 @@ def test_get_access_token(client: TestClient) -> None:
         "username": settings.FIRST_SUPERUSER,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_STR}/login/access-token", data=login_data)
     tokens = r.json()
     assert r.status_code == 200
     assert "access_token" in tokens
@@ -30,7 +30,7 @@ def test_get_access_token_incorrect_password(client: TestClient) -> None:
         "username": settings.FIRST_SUPERUSER,
         "password": "incorrect",
     }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_STR}/login/access-token", data=login_data)
     assert r.status_code == 400
 
 
@@ -38,7 +38,7 @@ def test_use_access_token(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     r = client.post(
-        f"{settings.API_V1_STR}/login/test-token",
+        f"{settings.API_STR}/login/test-token",
         headers=superuser_token_headers,
     )
     result = r.json()
@@ -55,7 +55,7 @@ def test_recovery_password(
     ):
         email = "test@example.com"
         r = client.post(
-            f"{settings.API_V1_STR}/password-recovery/{email}",
+            f"{settings.API_STR}/password-recovery/{email}",
             headers=normal_user_token_headers,
         )
         assert r.status_code == 200
@@ -69,7 +69,7 @@ def test_recovery_password_user_not_exits(
 ) -> None:
     email = "jVgQr@example.com"
     r = client.post(
-        f"{settings.API_V1_STR}/password-recovery/{email}",
+        f"{settings.API_STR}/password-recovery/{email}",
         headers=normal_user_token_headers,
     )
     # Should return 200 with generic message to prevent email enumeration attacks
@@ -97,7 +97,7 @@ def test_reset_password(client: TestClient, db: Session) -> None:
     data = {"new_password": new_password, "token": token}
 
     r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+        f"{settings.API_STR}/reset-password/",
         headers=headers,
         json=data,
     )
@@ -115,7 +115,7 @@ def test_reset_password_invalid_token(
 ) -> None:
     data = {"new_password": "changethis", "token": "invalid"}
     r = client.post(
-        f"{settings.API_V1_STR}/reset-password/",
+        f"{settings.API_STR}/reset-password/",
         headers=superuser_token_headers,
         json=data,
     )
@@ -146,7 +146,7 @@ def test_login_with_bcrypt_password_upgrades_to_argon2(
     assert user.hashed_password.startswith("$2")
 
     login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_STR}/login/access-token", data=login_data)
     assert r.status_code == 200
     tokens = r.json()
     assert "access_token" in tokens
@@ -180,7 +180,7 @@ def test_login_with_argon2_password_keeps_hash(client: TestClient, db: Session) 
     original_hash = user.hashed_password
 
     login_data = {"username": email, "password": password}
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
+    r = client.post(f"{settings.API_STR}/login/access-token", data=login_data)
     assert r.status_code == 200
     tokens = r.json()
     assert "access_token" in tokens

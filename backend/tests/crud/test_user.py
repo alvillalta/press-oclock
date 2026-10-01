@@ -83,7 +83,9 @@ def test_update_user(db: Session) -> None:
     user_in = UserCreate(email=email, password=password, is_superuser=True)
     user = crud.create_user(session=db, user_create=user_in)
     new_password = random_lower_string()
-    user_in_update = UserUpdate(password=new_password, is_superuser=True)
+    user_in_update = UserUpdate(
+        email=email, password=new_password, is_superuser=True
+    )
     if user.id is not None:
         crud.update_user(session=db, db_user=user, user_in=user_in_update)
     user_2 = db.get(User, user.id)
@@ -91,6 +93,22 @@ def test_update_user(db: Session) -> None:
     assert user.email == user_2.email
     verified, _ = verify_password(new_password, user_2.hashed_password)
     assert verified
+
+
+def test_update_user_without_password_preserves_existing_password(db: Session) -> None:
+    email = random_email()
+    password = random_lower_string()
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(email=email, password=password),
+    )
+    existing_hash = user.hashed_password
+    user_update = UserUpdate(email=email, full_name="Updated name")
+
+    updated_user = crud.update_user(session=db, db_user=user, user_in=user_update)
+
+    assert updated_user.full_name == "Updated name"
+    assert updated_user.hashed_password == existing_hash
 
 
 def test_authenticate_user_with_bcrypt_upgrades_to_argon2(db: Session) -> None:
