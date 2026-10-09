@@ -21,6 +21,7 @@ dependencies = [
     "pwdlib[argon2,bcrypt]>=0.3.0",
     "pgvector>=0.4.2",
     "openai>=2.43.0",
+    "supabase>=2.10.0,<3.0.0",
 ]
 
 [dependency-groups]

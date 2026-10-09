@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 
 from app import crud
 from app.core.config import settings
-from app.models import Chunk, ChunkCreate, Mail, Question, Source
+from app.models import Attachment, Chunk, ChunkCreate, Mail, Question, Source
 from app.rag.augmentation import augment_chunks, group_chunks, merge_windows
 from app.rag.citations import CitationService
 from app.rag.metadata import MetadataService
@@ -95,6 +95,63 @@ def test_citations_use_source_and_received_at_fields() -> None:
     )
     assert serialized_received_at == received_at
     assert citation["content"] == chunk.content
+
+
+def test_attachment_citations_include_parent_mail_and_file_metadata() -> None:
+    source_id = uuid4()
+    attachment_id = uuid4()
+    mail_id = uuid4()
+    user_id = uuid4()
+    received_at = datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)
+    chunk = make_chunk(source_id)
+    source = Source(id=source_id, origin="attachment", user_id=user_id)
+    attachment = Attachment(
+        id=attachment_id,
+        mail_id=mail_id,
+        source_id=source_id,
+        filename="brief.pdf",
+        mime_type="application/pdf",
+        storage_path="private/brief.pdf",
+    )
+    mail = Mail(
+        id=mail_id,
+        subject="Subject",
+        sender="sender@example.com",
+        received_at=received_at,
+        user_id=user_id,
+        source_id=uuid4(),
+    )
+    grouped_chunks = group_chunks([(chunk, source)], [(source_id, 1, 1)])
+
+    class FakeResult:
+        def all(self) -> list[tuple[Attachment, Mail]]:
+            return [(attachment, mail)]
+
+    class FakeSession:
+        calls = 0
+
+        def exec(self, _statement: object) -> FakeResult:
+            self.calls += 1
+            return FakeResult()
+
+    session = FakeSession()
+    enriched_groups = MetadataService().load_source_details(
+        session=session,  # type: ignore[arg-type]
+        augmented_chunk_groups=grouped_chunks,
+    )
+    citation = CitationService().get_citations_metadata(
+        [chunk], enriched_groups
+    )[0].model_dump(mode="json")
+
+    assert session.calls == 1
+    assert citation["origin"] == "attachment"
+    assert citation["details"]["mail_id"] == str(mail_id)
+    assert citation["details"]["attachment_id"] == str(attachment_id)
+    assert citation["details"]["filename"] == "brief.pdf"
+    assert citation["details"]["mime_type"] == "application/pdf"
+    assert citation["details"]["subject"] == "Subject"
+    assert citation["details"]["sender"] == "sender@example.com"
+    assert "storage_path" not in citation["details"]
 
 
 def test_question_serializes_citations_without_sources() -> None:

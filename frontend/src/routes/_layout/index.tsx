@@ -232,9 +232,14 @@ function Dashboard() {
                       <button
                         type="button"
                         key={`${source.source_id}-${index}`}
-                        disabled={source.origin !== "mail"}
+                        disabled={
+                          !["mail", "attachment"].includes(source.origin)
+                        }
                         onClick={() => {
-                          if (source.origin === "mail") {
+                          if (
+                            source.origin === "mail" ||
+                            source.origin === "attachment"
+                          ) {
                             void handleSourceClick(
                               String(source.details.mail_id ?? ""),
                             )
@@ -248,7 +253,10 @@ function Dashboard() {
                         <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                           <p>origin: {source.origin || "-"}</p>
                           {Object.entries(source.details)
-                            .filter(([key]) => key !== "mail_id")
+                            .filter(
+                              ([key]) =>
+                                key !== "mail_id" && key !== "attachment_id",
+                            )
                             .map(([key, value]) => (
                               <p key={key}>
                                 {key.replace(/_/g, " ")}: {String(value ?? "-")}

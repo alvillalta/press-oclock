@@ -1,9 +1,33 @@
+import asyncio
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from typing import Any
 from uuid import UUID, uuid4
+
+import pytest
 
 from app.core.config import settings
 from app.models import AugmentedChunksGroup, Chunk
+from app.rag import generation
 from app.rag.generation import GenerationService
+
+
+def completion_response(content: str | None) -> Any:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
+
+
+def fake_openai_client(create: Any) -> tuple[Any, dict[str, int]]:
+    calls = {"create": 0}
+
+    async def create_wrapper(**kwargs: Any) -> Any:
+        calls["create"] += 1
+        return await create(**kwargs)
+
+    completions = SimpleNamespace(create=create_wrapper)
+    chat = SimpleNamespace(completions=completions)
+    return SimpleNamespace(chat=chat), calls
 
 
 def make_chunk(source_id: UUID, position: int, content: str) -> Chunk:
@@ -68,3 +92,118 @@ def test_build_prompt_context_separates_multiple_sources() -> None:
     assert "FUENTE 1" in context
     assert "FUENTE 2" in context
     assert "\n---\n" in context
+
+
+def test_generation_service_default_retry_configuration() -> None:
+    service = GenerationService()
+
+    assert service.max_retries == 3
+    assert service.wait_seconds == 2
+
+
+def test_generation_service_custom_retry_configuration() -> None:
+    service = GenerationService(max_retries=5, wait_seconds=1)
+
+    assert service.max_retries == 5
+    assert service.wait_seconds == 1
+
+
+@pytest.mark.anyio
+async def test_generation_succeeds_on_first_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def create(**_kwargs: Any) -> Any:
+        return completion_response("Respuesta")
+
+    client, calls = fake_openai_client(create)
+    monkeypatch.setattr(generation, "client", client)
+    slept: list[int] = []
+
+    async def fake_sleep(seconds: int) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    answer = await GenerationService().generate_answer("Pregunta", [])
+
+    assert answer == "Respuesta"
+    assert calls["create"] == 1
+    assert slept == []
+
+
+@pytest.mark.anyio
+async def test_generation_retries_after_error_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = {"count": 0}
+
+    async def create(**_kwargs: Any) -> Any:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("boom")
+        return completion_response("Respuesta")
+
+    client, calls = fake_openai_client(create)
+    monkeypatch.setattr(generation, "client", client)
+    slept: list[int] = []
+
+    async def fake_sleep(seconds: int) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    answer = await GenerationService(max_retries=3, wait_seconds=2).generate_answer(
+        "Pregunta", []
+    )
+
+    assert answer == "Respuesta"
+    assert calls["create"] == 2
+    assert slept == [2]
+
+
+@pytest.mark.anyio
+async def test_generation_raises_after_exhausting_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def create(**_kwargs: Any) -> Any:
+        raise RuntimeError("boom")
+
+    client, calls = fake_openai_client(create)
+    monkeypatch.setattr(generation, "client", client)
+    slept: list[int] = []
+
+    async def fake_sleep(seconds: int) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(RuntimeError):
+        await GenerationService(max_retries=3, wait_seconds=2).generate_answer(
+            "Pregunta", []
+        )
+
+    assert calls["create"] == 3
+    assert slept == [2, 4]
+
+
+@pytest.mark.anyio
+async def test_generation_empty_answer_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def create(**_kwargs: Any) -> Any:
+        return completion_response(None)
+
+    client, calls = fake_openai_client(create)
+    monkeypatch.setattr(generation, "client", client)
+    slept: list[int] = []
+
+    async def fake_sleep(seconds: int) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    answer = await GenerationService().generate_answer("Pregunta", [])
+
+    assert answer == ""
+    assert calls["create"] == 1
+    assert slept == []

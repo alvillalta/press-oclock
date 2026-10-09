@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from openai.types.chat import (
@@ -6,7 +7,7 @@ from openai.types.chat import (
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.core.openai_client import get_openai_client
+from app.integrations.openai_client import get_openai_client
 from app.models import AugmentedChunksGroup, QuestionBase
 
 logger = get_logger(__name__)
@@ -96,22 +97,40 @@ def build_messages(question: str, prompt_context: str) -> list[ChatCompletionMes
     ]
 
 
-async def ask_question(question: QuestionBase, prompt_context: str) -> str:
+async def ask_question(
+    question: QuestionBase, prompt_context: str, max_retries: int, wait_seconds: int
+) -> str:
     """
     Generación de la respuesta.
     """
     logger.info("Generating answer")
 
     messages = build_messages(question, prompt_context)
-    response = await client.chat.completions.create(
-        model=settings.GENERATION_MODEL,
-        messages=messages,
-    )
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = await client.chat.completions.create(
+                model=settings.GENERATION_MODEL,
+                messages=messages,
+            )
+            break
+        except Exception as exc:
+            logger.warning(
+                "Generation failed (attempt %s/%s): %s", attempt, max_retries, exc
+            )
+            if attempt == max_retries:
+                raise RuntimeError("Answer generation failed") from exc
+            await asyncio.sleep(wait_seconds * attempt)
+
     return response.choices[0].message.content or ""
 
 
 class GenerationService:
     """Servicio para construir el contexto del prompt y generar la respuesta."""
+
+    def __init__(self, max_retries: int = 3, wait_seconds: int = 2):
+        self.max_retries = max_retries
+        self.wait_seconds = wait_seconds
 
     def build_prompt_context(self, augmented_chunk_groups: list[AugmentedChunksGroup]) -> str:
         return create_context(augmented_chunk_groups)
@@ -121,4 +140,6 @@ class GenerationService:
     ) -> str:
         # Orquesta aquí otro método de la clase para pasar el contexto a texto plano
         prompt_context = self.build_prompt_context(augmented_chunk_groups)
-        return await ask_question(question_in, prompt_context)
+        return await ask_question(
+            question_in, prompt_context, self.max_retries, self.wait_seconds
+        )

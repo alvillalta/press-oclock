@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlmodel import Session, col, select
 
 from app.core.logging import get_logger
-from app.models import AugmentedChunksGroup, Mail
+from app.models import Attachment, AugmentedChunksGroup, Mail
 
 logger = get_logger(__name__)
 
@@ -34,9 +34,35 @@ def _load_mail_details(
     }
 
 
+def _load_attachment_details(
+    session: Session, source_ids: list[UUID]
+) -> dict[UUID, SourceDetails]:
+    query = (
+        select(Attachment, Mail)
+        .join(Mail, col(Attachment.mail_id) == col(Mail.id))
+        .where(col(Attachment.source_id).in_(source_ids))
+    )
+    attachments = list(session.exec(query).all())
+    return {
+        attachment.source_id: {
+            "mail_id": mail.id,
+            "attachment_id": attachment.id,
+            "filename": attachment.filename,
+            "mime_type": attachment.mime_type,
+            # Abajo las propiedades de Mail que se incluyen dentro de la instancia de attachment a devolver
+            "subject": mail.subject,
+            "sender": str(mail.sender),
+            "received_at": mail.received_at,
+        }
+        for attachment, mail in attachments
+    }
+
+
 # Diccionario de mapeo
 SOURCE_DETAILS_LOADERS: dict[str, SourceDetailsLoader] = {
+    # _ delante de la función es una convención de Python para referirse a funciones de uso interno de este módulo
     "mail": _load_mail_details,
+    "attachment": _load_attachment_details,
 }
 
 

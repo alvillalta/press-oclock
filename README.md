@@ -379,7 +379,16 @@ SENTRY_DSN=
 
 # Make.com webhook integration
 MAKE_API_KEY=your_make_api_key
-MAIL_WEBHOOK_USER_ID=
+MAIL_WEBHOOK_USER_ID=00000000-0000-0000-0000-000000000000
+
+# Supabase Storage (required for email attachment ingestion)
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
+SUPABASE_STORAGE_BUCKET=mail-attachments
+MAIL_ATTACHMENT_MAX_BYTES=5000000
+MAIL_ATTACHMENT_STORAGE_RETRIES=3
+MAIL_STAGE_TTL_HOURS=24
+MAIL_STAGE_RETENTION_DAYS=30
 
 # OpenAI models
 OPENAI_API_KEY=your_openai_api_key
@@ -392,7 +401,13 @@ DOCKER_IMAGE_BACKEND=backend
 DOCKER_IMAGE_FRONTEND=frontend
 ```
 
-The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `OPENAI_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` and `GENERATION_MODEL`. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
+The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `MAIL_WEBHOOK_USER_ID`, `OPENAI_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` and `GENERATION_MODEL`. `MAIL_WEBHOOK_USER_ID` must be a valid UUID and should reference an existing user, since incoming mails are attributed to it. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
+
+Email attachment ingestion additionally requires a private Supabase Storage bucket matching `SUPABASE_STORAGE_BUCKET`. Keep `SUPABASE_SERVICE_ROLE_KEY` on the backend only. Expired staged uploads and pending Storage deletions can be cleaned by scheduling `python -m app.cleanup_mail_ingestions` from the backend directory.
+
+The Make scenario starts an ingestion with `POST /api/mails/stages`, uploads each file as `multipart/form-data` to `POST /api/mails/stages/{ingestion_id}/attachments` (`file`, `external_id`, and optional `mime_type` fields), then calls `POST /api/mails/stages/{ingestion_id}/finalize` after its attachment iterator completes. The API enforces a 5 MB (5,000,000-byte) total attachment limit per staged mail.
+
+If the start response reports `status=completed`, the Gmail message was already ingested and Make should skip the attachment iterator and finalization.
 
 ### 2. Frontend Setup
 
