@@ -128,6 +128,7 @@ class Mail(MailBase, table=True):
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
+    external_id: str | None = Field(default=None, max_length=255)
     source_id: uuid.UUID = Field(
         foreign_key="source.id", nullable=False, unique=True, ondelete="CASCADE"
     )
@@ -143,6 +144,9 @@ class Mail(MailBase, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
     )
+    __table_args__ = (
+        UniqueConstraint("user_id", "external_id", name="uq_mail_user_external_id"),
+    )
 
 
 # Propiedades a devolver vía API
@@ -151,10 +155,20 @@ class MailPublic(MailBase):
     user_id: uuid.UUID
     source_id: uuid.UUID
     created_at: datetime
+    has_attachments: bool = False
+
+
+class AttachmentPublic(SQLModel):
+    id: uuid.UUID
+    filename: str
+    mime_type: str
+    extraction_status: str
+    created_at: datetime
 
 
 class MailResponse(MailPublic):
     body: str | None = None
+    attachments: list[AttachmentPublic] = Field(default_factory=list)
 
 
 # ATTACHMENT
@@ -172,6 +186,9 @@ class Attachment(SQLModel, table=True):
     mime_type: str = Field(max_length=255)
     storage_path: str
     extraction: str | None = Field(default=None)
+    # Estado de la futura extracción de texto (MarkItDown). En esta versión solo se
+    # inicializa; ningún proceso lo modifica todavía.
+    extraction_status: str = Field(default="pending", max_length=30)
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
@@ -179,6 +196,111 @@ class Attachment(SQLModel, table=True):
     mail: Mail | None = Relationship(back_populates="attachments")
     source: Source | None = Relationship(
         back_populates="attachment",
+    )
+
+
+class MailStageCreate(MailBase):
+    external_id: str = Field(min_length=1, max_length=255)
+    body: str | None = Field(default=None)
+
+
+class MailStage(SQLModel, table=True):
+    """Temporary ingestion record kept until a staged mail is finalized."""
+
+    __tablename__ = "mail_stage"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    external_id: str = Field(min_length=1, max_length=255)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    subject: str | None = Field(default=None, max_length=255)
+    sender: EmailStr = Field(max_length=255)
+    received_at: datetime = Field(sa_type=DateTime(timezone=True))
+    body: str | None = Field(default=None)
+    status: str = Field(default="receiving", max_length=30)
+    total_size_bytes: int = Field(default=0, ge=0)
+    mail_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="mail.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    result_summary: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+    attachments: list["AttachmentStage"] = Relationship(
+        back_populates="mail_stage", cascade_delete=True
+    )
+    __table_args__ = (
+        UniqueConstraint("user_id", "external_id", name="uq_mail_stage_user_external_id"),
+    )
+
+
+class AttachmentStage(SQLModel, table=True):
+    """Temporary status and Storage path for one attachment upload."""
+
+    __tablename__ = "attachment_stage"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    mail_stage_id: uuid.UUID = Field(
+        foreign_key="mail_stage.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    external_id: str = Field(min_length=1, max_length=255)
+    filename: str = Field(max_length=255)
+    mime_type: str = Field(max_length=255)
+    size_bytes: int = Field(default=0, ge=0)
+    status: str = Field(default="pending", max_length=30)
+    reason: str | None = Field(default=None, max_length=255)
+    attempt_count: int = Field(default=0, ge=0)
+    storage_path: str | None = Field(default=None)
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
+    )
+    mail_stage: MailStage | None = Relationship(back_populates="attachments")
+    __table_args__ = (
+        UniqueConstraint(
+            "mail_stage_id", "external_id", name="uq_attachment_stage_mail_external_id"
+        ),
+    )
+
+
+class MailStagePublic(SQLModel):
+    ingestion_id: uuid.UUID | None = None
+    external_id: str
+    status: str
+    mail_id: uuid.UUID | None = None
+    result_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class AttachmentStagePublic(SQLModel):
+    external_id: str
+    status: str
+    reason: str | None = None
+    attempt_count: int
+    size_bytes: int
+
+
+class AttachmentSignedUrl(SQLModel):
+    url: str
+    expires_in: int
+
+
+class StorageCleanup(SQLModel, table=True):
+    """Durable retry record for deleting an object from Supabase Storage."""
+
+    __tablename__ = "storage_cleanup"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    storage_path: str = Field(unique=True, index=True)
+    attempt_count: int = Field(default=0, ge=0)
+    last_error: str | None = None
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),
     )
 
 

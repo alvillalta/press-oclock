@@ -5,7 +5,6 @@ import { Suspense } from "react"
 
 import { type MailPublic, MailsService } from "@/client"
 import { DataTable } from "@/components/Common/DataTable"
-import AddItem from "@/components/Items/AddItem"
 import { columns } from "@/components/Items/columns"
 import PendingItems from "@/components/Pending/PendingItems"
 
@@ -71,7 +70,6 @@ function ItemsIndex() {
             Gestiona tu bandeja de entrada
           </p>
         </div>
-        <AddItem />
       </div>
       <ItemsTable />
     </div>

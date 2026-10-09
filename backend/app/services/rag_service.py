@@ -31,15 +31,13 @@ class RagService:
         embedded_question = await embedding_service.create_question_embedding(
             question_in
         )
-        if not embedded_question:
-            raise ValueError("No embedding generated for the question")
 
         retrieval_service = RetrievalService()
         similar_chunks = retrieval_service.search_similar_chunks(
             session=self.session, embedded_question=embedded_question, user_id=user_id
         )
         if not similar_chunks:
-            raise ValueError("No similar chunks found for current user")
+            raise LookupError("No similar chunks found for current user")
 
         augmentation_service = AugmentationService()
         augmented_chunk_groups = augmentation_service.create_chunk_groups(
@@ -53,8 +51,6 @@ class RagService:
 
         generation_service = GenerationService()
         answer = await generation_service.generate_answer(question_in, augmented_chunk_groups)
-        if not answer:
-            raise ValueError("No answer generated for the question")
 
         citation_service = CitationService()
         citations = citation_service.get_citations_metadata(similar_chunks, augmented_chunk_groups)

@@ -3,7 +3,7 @@ from typing import List
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.core.openai_client import get_openai_client
+from app.integrations.openai_client import get_openai_client
 from app.models import ChunkBase, ChunkCreate, QuestionBase, QuestionEmbedding
 
 logger = get_logger(__name__)
@@ -48,7 +48,7 @@ async def generate_chunk_embeddings(
             except Exception as exc:
                 logger.warning("Embedding batch failed (attempt %s/%s): %s", attempt, max_retries, exc)
                 if attempt == max_retries:
-                    raise
+                    raise RuntimeError("Chunks embedding failed") from exc
                 await asyncio.sleep(wait_seconds * attempt)
 
         if len(batch) != len(response.data):
@@ -99,7 +99,7 @@ async def generate_question_embedding(
         except Exception as exc:
             logger.warning("Embedding batch failed (attempt %s/%s): %s", attempt, max_retries, exc)
             if attempt == max_retries:
-                raise
+                raise RuntimeError("Question embedding failed") from exc
             await asyncio.sleep(wait_seconds * attempt)
     
     embedded_question = validate_embedding_dimensions(response.data[0].embedding)

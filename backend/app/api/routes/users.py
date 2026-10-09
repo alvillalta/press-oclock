@@ -23,6 +23,7 @@ from app.models import (
     UserUpdate,
     UserUpdateMe,
 )
+from app.services.storage_cleanup_service import StorageCleanupService
 from app.utils import generate_new_account_email, send_email
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -129,7 +130,7 @@ def read_user_me(current_user: CurrentUser) -> Any:
 
 
 @router.delete("/me", response_model=Message)
-def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
+async def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     """
     Delete own user.
     """
@@ -140,6 +141,7 @@ def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     crud.delete_user_mails(session=session, user_id=current_user.id)
     session.delete(current_user)
     session.commit()
+    await StorageCleanupService(session=session).process_pending()
     return Message(message="User deleted successfully")
 
 
@@ -212,7 +214,7 @@ def update_user(
 
 
 @router.delete("/{user_id}", dependencies=[Depends(get_current_active_superuser)])
-def delete_user(
+async def delete_user(
     session: SessionDep, current_user: CurrentUser, user_id: uuid.UUID
 ) -> Message:
     """
@@ -228,4 +230,5 @@ def delete_user(
     crud.delete_user_mails(session=session, user_id=user_id)
     session.delete(user)
     session.commit()
+    await StorageCleanupService(session=session).process_pending()
     return Message(message="User deleted successfully")

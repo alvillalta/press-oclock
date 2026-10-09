@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, MailsReadMailsData, MailsReadMailsResponse, MailsIngestMailData, MailsIngestMailResponse, MailsReadMailData, MailsReadMailResponse, MailsDeleteMailData, MailsDeleteMailResponse, PrivateCreateUserData, PrivateCreateUserResponse, QuestionsReadQuestionsData, QuestionsReadQuestionsResponse, QuestionsCreateQuestionData, QuestionsCreateQuestionResponse, QuestionsReadQuestionData, QuestionsReadQuestionResponse, QuestionsDeleteQuestionData, QuestionsDeleteQuestionResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { LoginLoginAccessTokenData, LoginLoginAccessTokenResponse, LoginTestTokenResponse, LoginRecoverPasswordData, LoginRecoverPasswordResponse, LoginResetPasswordData, LoginResetPasswordResponse, LoginRecoverPasswordHtmlContentData, LoginRecoverPasswordHtmlContentResponse, MailsReadMailsData, MailsReadMailsResponse, IngestMailData, IngestMailResponse, MailsReadMailData, MailsReadMailResponse, MailsDeleteMailData, MailsDeleteMailResponse, GetMailAttachmentSignedUrlData, GetMailAttachmentSignedUrlResponse, ReadMailAttachmentTextData, ReadMailAttachmentTextResponse, PrivateCreateUserData, PrivateCreateUserResponse, QuestionsReadQuestionsData, QuestionsReadQuestionsResponse, QuestionsCreateQuestionData, QuestionsCreateQuestionResponse, QuestionsReadQuestionData, QuestionsReadQuestionResponse, QuestionsDeleteQuestionData, QuestionsDeleteQuestionResponse, UsersReadUsersData, UsersReadUsersResponse, UsersCreateUserData, UsersCreateUserResponse, UsersReadUserMeResponse, UsersDeleteUserMeResponse, UsersUpdateUserMeData, UsersUpdateUserMeResponse, UsersUpdatePasswordMeData, UsersUpdatePasswordMeResponse, UsersRegisterUserData, UsersRegisterUserResponse, UsersReadUserByIdData, UsersReadUserByIdResponse, UsersUpdateUserData, UsersUpdateUserResponse, UsersDeleteUserData, UsersDeleteUserResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class LoginService {
     /**
@@ -128,20 +128,27 @@ export class MailsService {
     
     /**
      * Ingest Mail
-     * Ingesta de un correo y sus embeddings dentro del sistema.
-     * Este flujo no es multiusuario, se resuelve a partir de la configuración con Make
-     * (de ahí user_id=settings.MAIL_WEBHOOK_USER_ID)
+     * Ingesta síncrona de un correo y todos sus adjuntos en una única petición.
+     *
+     * Make envía el correo y sus archivos juntos. El backend sube los adjuntos y
+     * persiste el correo (y los adjuntos que se hayan guardado) antes de responder.
+     *
+     * Ejemplo de petición multipart:
+     * - mail: {"external_id": "gmail-1", "sender": "a@b.com", "received_at": "...",
+     * "subject": "Asunto", "body": "Cuerpo"}
+     * - attachment_external_ids: ["gmail-attachment-1"]
+     * - files: brief.pdf
      * @param data The data for the request.
-     * @param data.requestBody
-     * @returns MailPublic Successful Response
+     * @param data.formData
+     * @returns MailStagePublic Successful Response
      * @throws ApiError
      */
-    public static ingestMail(data: MailsIngestMailData): CancelablePromise<MailsIngestMailResponse> {
+    public static ingestMail(data: IngestMailData): CancelablePromise<IngestMailResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/mails/',
-            body: data.requestBody,
-            mediaType: 'application/json',
+            url: '/api/mails/ingest',
+            formData: data.formData,
+            mediaType: 'multipart/form-data',
             errors: {
                 422: 'Validation Error'
             }
@@ -150,7 +157,7 @@ export class MailsService {
     
     /**
      * Read Mail
-     * Get mail by ID.
+     * Recupera un correo por ID así como sus adjuntos.
      * @param data The data for the request.
      * @param data.id
      * @returns MailResponse Successful Response
@@ -183,6 +190,54 @@ export class MailsService {
             url: '/api/mails/{id}',
             path: {
                 id: data.id
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Read Attachment Signed Url
+     * @param data The data for the request.
+     * @param data.mailId
+     * @param data.attachmentId
+     * @param data.download
+     * @returns AttachmentSignedUrl Successful Response
+     * @throws ApiError
+     */
+    public static getMailAttachmentSignedUrl(data: GetMailAttachmentSignedUrlData): CancelablePromise<GetMailAttachmentSignedUrlResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/mails/{mail_id}/attachments/{attachment_id}/signed-url',
+            path: {
+                mail_id: data.mailId,
+                attachment_id: data.attachmentId
+            },
+            query: {
+                download: data.download
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Read Text Attachment
+     * @param data The data for the request.
+     * @param data.mailId
+     * @param data.attachmentId
+     * @returns string Successful Response
+     * @throws ApiError
+     */
+    public static readMailAttachmentText(data: ReadMailAttachmentTextData): CancelablePromise<ReadMailAttachmentTextResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/mails/{mail_id}/attachments/{attachment_id}/text',
+            path: {
+                mail_id: data.mailId,
+                attachment_id: data.attachmentId
             },
             errors: {
                 422: 'Validation Error'

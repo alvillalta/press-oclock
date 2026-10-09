@@ -104,7 +104,16 @@ class Settings(BaseSettings):
 
     # Integraciones externas
     MAKE_API_KEY: str
-    MAIL_WEBHOOK_USER_ID: uuid.UUID | None = None
+    MAIL_WEBHOOK_USER_ID: uuid.UUID
+
+    MAIL_ATTACHMENT_MAX_BYTES: int = 5_000_000
+    MAIL_ATTACHMENT_STORAGE_RETRIES: int = 3
+    MAIL_STAGE_TTL_HOURS: int = 24
+    MAIL_STAGE_RETENTION_DAYS: int = 30
+
+    SUPABASE_URL: HttpUrl | None = None
+    SUPABASE_SERVICE_ROLE_KEY: str | None = None
+    SUPABASE_STORAGE_BUCKET: str = "mail-attachments"
 
     OPENAI_API_KEY: str
     EMBEDDING_MODEL: str
