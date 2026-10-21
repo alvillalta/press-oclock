@@ -7,6 +7,7 @@ from app import crud
 from app.api.deps import CurrentUser, SessionDep
 from app.core.logging import get_logger
 from app.models import Message, Question, QuestionBase, QuestionPublic
+from app.rag.embedding import EmbeddingResponseError
 from app.services.rag_service import RagService
 
 router = APIRouter(prefix="/questions", tags=["questions"])
@@ -66,6 +67,8 @@ async def create_question(
         question = await rag_service.answer_question(
             question_in=question_in, user_id=current_user.id
         )
+    except EmbeddingResponseError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except RuntimeError as exc:

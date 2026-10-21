@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import tuple_
 from sqlmodel import Session, col, delete, select
 
 from app.core.security import get_password_hash, verify_password
@@ -12,7 +14,6 @@ from app.models import (
     Mail,
     MailCreate,
     MailStage,
-    Message,
     Question,
     QuestionCreate,
     Source,
@@ -77,7 +78,7 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
 
 
 def create_source(*, session: Session, origin: str, user_id: UUID) -> Source:
-    """Create a source owned by a user without committing the transaction."""
+    """Crea una source sin commitear la transacción en la db."""
     db_source = Source(origin=origin, user_id=user_id)
     # Si se hiciese .flush() aquí registraría la fuente antes de asociarla a mail, .add() simplemente la añade a la sesión
     session.add(db_source)
@@ -89,27 +90,20 @@ def create_mail(
     session: Session,
     mail_in: MailCreate,
     user_id: UUID,
-    external_id: str | None = None,
-    commit: bool = True,
 ) -> Mail:
+    """Crea un mail."""
     db_source = create_source(session=session, origin="mail", user_id=user_id)
     db_mail = Mail.model_validate(
         mail_in,
         update={
             "user_id": user_id,
             "source_id": db_source.id,
-            "external_id": external_id,
         },
     )
     db_mail.source = db_source
     session.add(db_mail)
-    # .commit() está indicado para que crud.py recoja la lógica de las transacciones, aunque se ejecute de facto en el archivo que llama a esta función
-    if commit:
-        session.commit()
-        session.refresh(db_mail)
-    else:
-        # .flush() registra en la base de datos pero deja la transacción abierta a diferencia de .commit()
-        session.flush()
+    # .flush() registra en la base de datos pero deja la transacción abierta a diferencia de .commit()
+    session.flush()
     return db_mail
 
 
@@ -118,19 +112,16 @@ def create_chunks(
     session: Session,
     chunks_in: list[ChunkCreate],
     source_id: UUID,
-    commit: bool = True,
-) -> Message:
+) -> None:
+    """Crea una lista de chuks."""
     for chunk in chunks_in:
         db_chunk = Chunk.model_validate(chunk, update={"source_id": source_id})
         session.add(db_chunk)
-    if commit:
-        session.commit()
-    else:
-        session.flush()
-    return Message(message="Chunks created successfully")
+    session.flush()
 
 
 def create_storage_cleanup(*, session: Session, storage_path: str) -> None:
+    """Añade un storage_path a StorageCleanup para borrarlo en Supabase Storage."""
     existing_storage_attachment = session.exec(
         select(StorageCleanup).where(StorageCleanup.storage_path == storage_path)
     ).first()
@@ -139,100 +130,88 @@ def create_storage_cleanup(*, session: Session, storage_path: str) -> None:
 
 
 def get_pending_storage_cleanup(
-    *, session: Session, limit: int
+    *,
+    session: Session,
+    limit: int,
+    max_attempts: int,
+    after_created_at: datetime | None = None,
+    after_id: UUID | None = None,
 ) -> list[StorageCleanup]:
-    statement = (
+    """Lista los storage_paths de StorageCleanup pendientes de limpiar de Supabase Storage."""
+    query_base = (
         select(StorageCleanup)
-        .order_by(col(StorageCleanup.created_at))
+        # Excluye los registros veneno para garantizar el avance de la cola
+        .where(col(StorageCleanup.attempt_count) < max_attempts)
+        .order_by(col(StorageCleanup.created_at), col(StorageCleanup.id))  # Por defecto es ascendente
         .limit(limit)
     )
-    return list(session.exec(statement).all())
+    # Lee estrictamente después del último registro procesado (para traer el siguiente lote de la consulta)
+    if after_created_at is not None and after_id is not None:
+        query = query_base.where(
+            tuple_(StorageCleanup.created_at, StorageCleanup.id)
+            > tuple_(after_created_at, after_id)
+        )
+    return list(session.exec(query).all())
 
 
-def delete_mail(*, session: Session, mail_in: Mail) -> list[str]:
-    """CAMBIAR Borra un correo, sus fuentes/chunks y registra sus ficheros para limpieza."""
+def delete_mail(*, session: Session, mail_in: Mail) -> None:
+    """Borra un mail, su mail_stage con status "completed", attachments, sources y chunks."""
     attachment_source_ids = list(
         session.exec(
             select(Attachment.source_id).where(Attachment.mail_id == mail_in.id)
         ).all()
     )
-    source_ids = [mail_in.source_id, *attachment_source_ids]
+    source_ids = [mail_in.source_id, *attachment_source_ids]  # * desempaqueta los iterables dentro de una lista nueva
     storage_paths = list(
         session.exec(
             select(Attachment.storage_path).where(Attachment.mail_id == mail_in.id)
         ).all()
     )
-
-    if mail_in.external_id:
-        matching_stages = list(
-            session.exec(
-                select(MailStage).where(
-                    MailStage.user_id == mail_in.user_id,
-                    MailStage.external_id == mail_in.external_id,
-                )
-            ).all()
-        )
-        for stage in matching_stages:
-            stage_paths = session.exec(
-                select(AttachmentStage.storage_path).where(
-                    col(AttachmentStage.mail_stage_id) == stage.id,
-                    col(AttachmentStage.storage_path).is_not(None),
-                )
-            ).all()
-            storage_paths.extend(path for path in stage_paths if path)
-            session.delete(stage)
-
-    for storage_path in set(storage_paths):
+            
+    # Manda cada storage_path a StorageCleanup
+    for storage_path in storage_paths:
         create_storage_cleanup(session=session, storage_path=storage_path)
 
-    if source_ids:
-        session.exec(delete(Chunk).where(col(Chunk.source_id).in_(source_ids)))
+    # El borrado crudo no carga objetos ni dispara cascadas de delete, borra y ya
+    session.exec(delete(Chunk).where(
+        col(Chunk.source_id).in_(source_ids))
+    )
     session.exec(
         delete(Attachment).where(col(Attachment.mail_id) == mail_in.id)
     )
-    session.delete(mail_in)
-    session.flush()
+    # Al hacer delete mail_in borra en cascada su mail_stage correspondiente que quedó en status "completed"
+    session.delete(mail_in)  # Este delete no es crudo como el resto porque opera sobre un objeto ya cargado
+    session.flush()  # Elimina mail y de ese modo termina de liberar las FK de sources para borrarlas finalmente 
 
-    if source_ids:
-        session.exec(delete(Source).where(col(Source.id).in_(source_ids)))
-
-    return storage_paths
+    session.exec(delete(Source).where(col(Source.id).in_(source_ids)))
 
 
-def delete_user_mails(*, session: Session, user_id: UUID) -> list[str]:
-    storage_paths: list[str] = []
+def delete_user_mails(*, session: Session, user_id: UUID) -> None:
+    """ Borra todos los mails de un usuario"""
     mails = session.exec(select(Mail).where(Mail.user_id == user_id)).all()
     for mail in mails:
-        storage_paths.extend(delete_mail(session=session, mail_in=mail))
+        delete_mail(session=session, mail_in=mail)
 
+    # Borra también los mail_stage que se quedaron en status "receiving"
     stages = session.exec(select(MailStage).where(MailStage.user_id == user_id)).all()
     for stage in stages:
-        stage_paths = session.exec(
-            select(AttachmentStage.storage_path).where(
-                col(AttachmentStage.mail_stage_id) == stage.id,
-                col(AttachmentStage.storage_path).is_not(None),
-            )
-        ).all()
-        storage_paths.extend(path for path in stage_paths if path)
-        session.delete(stage)
-
-    for storage_path in set(storage_paths):
-        create_storage_cleanup(session=session, storage_path=storage_path)
+        delete_mail_stage(session=session, stage=stage)
 
     session.flush()
-    return storage_paths
 
 
-def delete_storage_cleanup(
-    *, session: Session, cleanup: StorageCleanup
+def delete_storage_cleanup_record(
+    *, session: Session, cleanup_record: StorageCleanup
 ) -> None:
-    session.delete(cleanup)
+    """Borra el registro de storage_path de la tabla StorageCleanup."""
+    session.delete(cleanup_record)
     session.flush()
 
 
 def get_expired_mail_stages(
     *, session: Session, receiving_before: Any, completed_before: Any
 ) -> list[MailStage]:
+    """Trae de la db todos los mail_stage que se pasaron de fecha."""
     statement = select(MailStage).where(
         ((MailStage.status == "receiving") & (MailStage.created_at < receiving_before))
         | ((MailStage.status == "completed") & (MailStage.created_at < completed_before))
@@ -240,21 +219,22 @@ def get_expired_mail_stages(
     return list(session.exec(statement).all())
 
 
-def delete_mail_stage(*, session: Session, stage: MailStage) -> list[str]:
+def delete_mail_stage(*, session: Session, stage: MailStage) -> None:
+    """Borra un mail_stage."""
     storage_paths = list(
         session.exec(
             select(AttachmentStage.storage_path).where(
                 col(AttachmentStage.mail_stage_id) == stage.id,
-                col(AttachmentStage.storage_path).is_not(None),
+                col(AttachmentStage.storage_path).is_not(None),  # Parcialmente redundante pero evita traer filas null
             )
         ).all()
     )
-    paths = [path for path in storage_paths if path]
-    for storage_path in set(paths):
+    paths = [path for path in storage_paths if path]  # Parcialmente redundante pero evita strings vacíos en la lista
+    # Manda cada storage_path a StorageCleanup
+    for storage_path in paths:
         create_storage_cleanup(session=session, storage_path=storage_path)
     session.delete(stage)
     session.flush()
-    return paths
 
 
 def create_question(*, session: Session, question_in: QuestionCreate, user_id: UUID) -> Question:

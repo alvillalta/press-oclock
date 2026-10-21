@@ -25,5 +25,10 @@ def create_random_mail(
         sender=random_email(),
         received_at=datetime.now(timezone.utc),
         body=body,
+        external_id=random_lower_string()[:16],
     )
-    return crud.create_mail(session=db, mail_in=mail_in, user_id=user_id)
+    return crud.create_mail(
+        session=db,
+        mail_in=mail_in,
+        user_id=user_id,
+    )

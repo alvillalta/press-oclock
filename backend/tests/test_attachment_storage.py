@@ -48,8 +48,8 @@ class FakeStorageClient:
 def test_injected_client_handles_storage_operations_without_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "SUPABASE_URL", None)
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", None)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", None)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", None)
     monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET", "test-bucket")
     monkeypatch.setattr(
         attachment_storage,
@@ -100,8 +100,8 @@ def test_injected_client_handles_storage_operations_without_credentials(
 def test_storage_uses_central_client_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "SUPABASE_URL", None)
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", None)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", None)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", None)
     monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET", "test-bucket")
 
     bucket = FakeBucket()

@@ -16,8 +16,8 @@ def clear_supabase_client_cache():
 def test_get_supabase_client_caches_one_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://supabase.example/")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://supabase.example/")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "service-role-key")
     client = object()
     create_client = Mock(return_value=client)
     monkeypatch.setattr(supabase_client, "create_client", create_client)
@@ -35,8 +35,8 @@ def test_get_supabase_client_caches_one_client(
 @pytest.mark.parametrize(
     ("missing_setting", "missing_name"),
     [
-        ("SUPABASE_URL", "SUPABASE_URL"),
-        ("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY"),
+        ("SUPABASE_STORAGE_URL", "SUPABASE_STORAGE_URL"),
+        ("SUPABASE_STORAGE_KEY", "SUPABASE_STORAGE_KEY"),
     ],
 )
 def test_get_supabase_client_reports_missing_credentials(
@@ -44,8 +44,8 @@ def test_get_supabase_client_reports_missing_credentials(
     missing_setting: str,
     missing_name: str,
 ) -> None:
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://supabase.example")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://supabase.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "service-role-key")
     monkeypatch.setattr(settings, missing_setting, None)
 
     with pytest.raises(RuntimeError, match=missing_name):

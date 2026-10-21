@@ -49,7 +49,7 @@ def _load_attachment_details(
             "attachment_id": attachment.id,
             "filename": attachment.filename,
             "mime_type": attachment.mime_type,
-            # Abajo las propiedades de Mail que se incluyen dentro de la instancia de attachment a devolver
+            # Abajo las propiedades de Mail que se incluyen dentro de la instancia de attachment a devolver al LLM o para pintar en frontend
             "subject": mail.subject,
             "sender": str(mail.sender),
             "received_at": mail.received_at,
@@ -105,16 +105,5 @@ def get_metadata(
         }
         for group in augmented_chunk_groups
     ]
-
-
-class MetadataService:
-    """Carga los metadatos de las fuentes de los chunks"""
-
-    def load_source_details(
-            self,
-            session: Session,
-            augmented_chunk_groups: list[AugmentedChunksGroup]
-        ) -> list[AugmentedChunksGroup]:
-            return get_metadata(session, augmented_chunk_groups)
 
 

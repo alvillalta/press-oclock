@@ -132,14 +132,14 @@ def read_user_me(current_user: CurrentUser) -> Any:
 @router.delete("/me", response_model=Message)
 async def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     """
-    Delete own user.
+    Borrar el propio usuario.
     """
     if current_user.is_superuser:
         raise HTTPException(
             status_code=403, detail="Super users are not allowed to delete themselves"
         )
     crud.delete_user_mails(session=session, user_id=current_user.id)
-    session.delete(current_user)
+    session.delete(current_user)  # Question se borra por cascada
     session.commit()
     await StorageCleanupService(session=session).process_pending()
     return Message(message="User deleted successfully")
@@ -218,7 +218,7 @@ async def delete_user(
     session: SessionDep, current_user: CurrentUser, user_id: uuid.UUID
 ) -> Message:
     """
-    Delete a user.
+    Solo para superusuarios: Borra un usuario normal y todos sus datos asociados.
     """
     user = session.get(User, user_id)
     if not user:
@@ -228,7 +228,7 @@ async def delete_user(
             status_code=403, detail="Super users are not allowed to delete themselves"
         )
     crud.delete_user_mails(session=session, user_id=user_id)
-    session.delete(user)
+    session.delete(user)  # Question se borra por cascada
     session.commit()
     await StorageCleanupService(session=session).process_pending()
     return Message(message="User deleted successfully")

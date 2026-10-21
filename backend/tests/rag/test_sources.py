@@ -6,10 +6,10 @@ from sqlmodel import Session, select
 from app import crud
 from app.core.config import settings
 from app.models import Attachment, Chunk, ChunkCreate, Mail, Question, Source
-from app.rag.augmentation import augment_chunks, group_chunks, merge_windows
-from app.rag.citations import CitationService
-from app.rag.metadata import MetadataService
-from app.rag.retrieval import retrieve_chunks
+from app.rag.augmentation import AugmentationService, _group_chunks, _merge_windows
+from app.rag.citations import get_citations
+from app.rag.metadata import get_metadata
+from app.rag.retrieval import RetrievalService
 from tests.utils.mail import create_random_mail
 from tests.utils.user import create_random_user
 
@@ -27,7 +27,7 @@ def test_merge_windows_keeps_different_sources_separate() -> None:
     first_source_id = uuid4()
     second_source_id = uuid4()
 
-    windows = merge_windows(
+    windows = _merge_windows(
         [
             (second_source_id, 1, 2),
             (first_source_id, 3, 4),
@@ -56,9 +56,10 @@ def test_citations_use_source_and_received_at_fields() -> None:
         received_at=received_at,
         user_id=user_id,
         source_id=source_id,
+        external_id="external-id-1",
     )
 
-    grouped_chunks = group_chunks(
+    grouped_chunks = _group_chunks(
         [(chunk, source)],
         [(source_id, 1, 1)],
     )
@@ -75,15 +76,13 @@ def test_citations_use_source_and_received_at_fields() -> None:
             return FakeResult()
 
     session = FakeSession()
-    metadata_service = MetadataService()
-    enriched_groups = metadata_service.load_source_details(
+    enriched_groups = get_metadata(
         session=session,  # type: ignore[arg-type]
         augmented_chunk_groups=grouped_chunks,
     )
     assert session.calls == 1
 
-    citation_service = CitationService()
-    citations = citation_service.get_citations_metadata([chunk], enriched_groups)
+    citations = get_citations([chunk], enriched_groups)
 
     assert len(citations) == 1
     citation = citations[0].model_dump(mode="json")
@@ -120,8 +119,9 @@ def test_attachment_citations_include_parent_mail_and_file_metadata() -> None:
         received_at=received_at,
         user_id=user_id,
         source_id=uuid4(),
+        external_id="external-id-2",
     )
-    grouped_chunks = group_chunks([(chunk, source)], [(source_id, 1, 1)])
+    grouped_chunks = _group_chunks([(chunk, source)], [(source_id, 1, 1)])
 
     class FakeResult:
         def all(self) -> list[tuple[Attachment, Mail]]:
@@ -135,13 +135,11 @@ def test_attachment_citations_include_parent_mail_and_file_metadata() -> None:
             return FakeResult()
 
     session = FakeSession()
-    enriched_groups = MetadataService().load_source_details(
+    enriched_groups = get_metadata(
         session=session,  # type: ignore[arg-type]
         augmented_chunk_groups=grouped_chunks,
     )
-    citation = CitationService().get_citations_metadata(
-        [chunk], enriched_groups
-    )[0].model_dump(mode="json")
+    citation = get_citations([chunk], enriched_groups)[0].model_dump(mode="json")
 
     assert session.calls == 1
     assert citation["origin"] == "attachment"
@@ -191,11 +189,10 @@ def test_retrieval_and_expansion_are_scoped_to_source_owner(db: Session) -> None
             ],
         )
 
-    first_user_chunks = retrieve_chunks(
+    first_user_chunks = RetrievalService(chunks_limit=10).retrieve_chunks(
         session=db,
         embedded_question=embedding,
         user_id=first_user.id,
-        chunks_limit=10,
     )
     assert {chunk.source_id for chunk in first_user_chunks} == {first_mail.source_id}
 
@@ -203,11 +200,10 @@ def test_retrieval_and_expansion_are_scoped_to_source_owner(db: Session) -> None
         select(Chunk).where(Chunk.source_id == second_mail.source_id)
     ).one()
     assert (
-        augment_chunks(
+        AugmentationService(chunks_range=1).augment_chunks(
             session=db,
             similar_chunks=[second_user_chunk],
             user_id=first_user.id,
-            chunks_range=1,
         )
         == []
     )

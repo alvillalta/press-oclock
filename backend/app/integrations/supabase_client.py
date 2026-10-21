@@ -6,15 +6,15 @@ from app.core.config import settings
 # Cachea el cliente Supabase del Storage, no la base de datos de db.py
 @lru_cache
 def get_supabase_client() -> Client:
-    supabase_url = settings.SUPABASE_URL
-    service_role_key = settings.SUPABASE_SERVICE_ROLE_KEY
+    supabase_url = settings.SUPABASE_STORAGE_URL
+    service_role_key = settings.SUPABASE_STORAGE_KEY
     if not supabase_url or not service_role_key:
         # Pone el name como elemento de la lista missing_credentials si no existe una credential (supabase_url o service_role_key)
         missing_credentials = [
             name
             for credential, name in (
-                (supabase_url, "SUPABASE_URL"),
-                (service_role_key, "SUPABASE_SERVICE_ROLE_KEY"),
+                (supabase_url, "SUPABASE_STORAGE_URL"),
+                (service_role_key, "SUPABASE_STORAGE_KEY"),
             )
             if not credential
         ]

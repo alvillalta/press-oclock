@@ -23,7 +23,7 @@ ChunkPositionWindows: TypeAlias = list[
 ]
 
 
-def merge_windows(
+def _merge_windows(
     chunk_position_windows: ChunkPositionWindows,
 ) -> ChunkPositionWindows:
     """
@@ -80,7 +80,7 @@ ChunkWindowRetrieval: TypeAlias = dict[
 ]
 
 
-def group_chunks(
+def _group_chunks(
     augmented_list: AugmentedList,
     chunk_position_windows: ChunkPositionWindows,
 ) -> list[AugmentedChunksGroup]:
@@ -130,63 +130,54 @@ def group_chunks(
     return grouped_chunks
 
 
-def augment_chunks(
-    session: Session,
-    similar_chunks: list[Chunk],
-    user_id: UUID,
-    chunks_range: int,
-) -> list[AugmentedChunksGroup]:
-    """
-    Recupera las instancias aumentadas de los chunks similares que se le proporcionan.
-    """
-    logger.info("Querying the database for augmented instances of the similar chunks.")
-
-    # Sin esta comprobación la consulta a la db traería todos los chunks del usuario por el or_ vacío
-    if not similar_chunks:
-        return []
-
-    chunk_position_windows = merge_windows(
-        [
-            (
-                chunk.source_id,
-                max(1, chunk.position - chunks_range),
-                chunk.position + chunks_range,
-            )
-            for chunk in similar_chunks
-        ]
-    )
-    conditions = [
-        and_(
-            col(Chunk.source_id) == source_id,
-            col(Chunk.position) >= start,
-            col(Chunk.position) <= end,
-        )
-        for source_id, start, end in chunk_position_windows
-    ]
-
-    query = (
-        select(Chunk, Source)
-        .join(Source, col(Chunk.source_id) == col(Source.id))
-        .where(col(Source.user_id) == user_id)
-        .where(
-            or_(*conditions)
-        )  # or_ permite evaluar las condiciones de todas las ventanas de chunk_index y * desempaqueta la lista de condiciones.
-        .order_by(col(Chunk.source_id), col(Chunk.position))
-    )
-    augmented_list: AugmentedList = list(session.exec(query).all())
-    return group_chunks(augmented_list, chunk_position_windows)
-
-
 class AugmentationService:
     """Servicio para expandir chunks similares con sus contiguos y agruparlos por fuente."""
 
     def __init__(self, chunks_range: int = 1):
         self.chunks_range = chunks_range
 
-    def create_chunk_groups(
+    def augment_chunks(
         self,
         session: Session,
         similar_chunks: list[Chunk],
         user_id: UUID,
     ) -> list[AugmentedChunksGroup]:
-        return augment_chunks(session, similar_chunks, user_id, self.chunks_range)
+        """
+        Recupera las instancias aumentadas de los chunks similares que se le proporcionan.
+        """
+        logger.info("Querying the database for augmented instances of the similar chunks.")
+
+        # Sin esta comprobación la consulta a la db traería todos los chunks del usuario por el or_ vacío
+        if not similar_chunks:
+            return []
+
+        chunk_position_windows = _merge_windows(
+            [
+                (
+                    chunk.source_id,
+                    max(1, chunk.position - self.chunks_range),
+                    chunk.position + self.chunks_range,
+                )
+                for chunk in similar_chunks
+            ]
+        )
+        conditions = [
+            and_(
+                col(Chunk.source_id) == source_id,
+                col(Chunk.position) >= start,
+                col(Chunk.position) <= end,
+            )
+            for source_id, start, end in chunk_position_windows
+        ]
+
+        query = (
+            select(Chunk, Source)
+            .join(Source, col(Chunk.source_id) == col(Source.id))
+            .where(col(Source.user_id) == user_id)
+            .where(
+                or_(*conditions)
+            )  # or_ permite evaluar las condiciones de todas las ventanas de chunk_index y * desempaqueta la lista de condiciones.
+            .order_by(col(Chunk.source_id), col(Chunk.position))
+        )
+        augmented_list: AugmentedList = list(session.exec(query).all())
+        return _group_chunks(augmented_list, chunk_position_windows)

@@ -15,52 +15,7 @@ logger = get_logger(__name__)
 client = get_openai_client()
 
 
-def create_context(augmented_chunk_groups: list[AugmentedChunksGroup]) -> str:
-    """
-    Crea la parte variable del prompt para el modelo de IA generativa.
-    """
-    logger.info(
-        "Creating the prompt context from chunk groups and their specific metadata"
-    )
-
-    source_blocks: list[str] = []
-    for grouped_source_chunks in augmented_chunk_groups:
-        # Añade un número por cada iteración para enumerar la fuente en el prompt de abajo
-        source_number = len(source_blocks) + 1
-
-        # Une los textos de los chunks
-        joined_chunks = "\n".join(
-            chunk.content for chunk in grouped_source_chunks["chunk_list"]
-        )
-
-        # details se reinicia vacío cada vez que termina el bucle
-        details = []
-        # Bucle para recorrer las parejas CLAVE-VALOR de los distintos diccionarios details
-        for details_key, details_value in grouped_source_chunks["details"].items():
-            if details_value is None:
-                rendered_value = "(sin datos)"
-            elif isinstance(details_value, datetime):
-                rendered_value = details_value.isoformat()
-            else:
-                rendered_value = str(details_value)
-            # Escribe el metadato en texto común legible
-            details.append(f"{details_key.replace('_', ' ').title()}: {rendered_value}")
-        # Une los textos de los metadatos
-        details_block = "\n".join(details)
-        if details_block:
-            details_block = f"{details_block}\n"
-
-        source_blocks.append(
-            f"\nFUENTE {source_number}\n"
-            f"Origin: {grouped_source_chunks['origin']}\n"
-            f"{details_block}"
-            f"Content: {joined_chunks}"
-        )
-
-    return "\n---\n".join(source_blocks)
-
-
-def build_messages(question: str, prompt_context: str) -> list[ChatCompletionMessageParam]:
+def _build_messages(question: str, prompt_context: str) -> list[ChatCompletionMessageParam]:
     """
     Construye el prompt final para el modelo de IA generativa.
     """
@@ -97,34 +52,6 @@ def build_messages(question: str, prompt_context: str) -> list[ChatCompletionMes
     ]
 
 
-async def ask_question(
-    question: QuestionBase, prompt_context: str, max_retries: int, wait_seconds: int
-) -> str:
-    """
-    Generación de la respuesta.
-    """
-    logger.info("Generating answer")
-
-    messages = build_messages(question, prompt_context)
-
-    for attempt in range(1, max_retries + 1):
-        try:
-            response = await client.chat.completions.create(
-                model=settings.GENERATION_MODEL,
-                messages=messages,
-            )
-            break
-        except Exception as exc:
-            logger.warning(
-                "Generation failed (attempt %s/%s): %s", attempt, max_retries, exc
-            )
-            if attempt == max_retries:
-                raise RuntimeError("Answer generation failed") from exc
-            await asyncio.sleep(wait_seconds * attempt)
-
-    return response.choices[0].message.content or ""
-
-
 class GenerationService:
     """Servicio para construir el contexto del prompt y generar la respuesta."""
 
@@ -133,13 +60,74 @@ class GenerationService:
         self.wait_seconds = wait_seconds
 
     def build_prompt_context(self, augmented_chunk_groups: list[AugmentedChunksGroup]) -> str:
-        return create_context(augmented_chunk_groups)
+        """
+        Crea la parte variable del prompt para el modelo de IA generativa.
+        """
+        logger.info(
+            "Creating the prompt context from chunk groups and their specific metadata"
+        )
+
+        source_blocks: list[str] = []
+        for grouped_source_chunks in augmented_chunk_groups:
+            # Añade un número por cada iteración para enumerar la fuente en el prompt de abajo
+            source_number = len(source_blocks) + 1
+
+            # Une los textos de los chunks
+            joined_chunks = "\n".join(
+                chunk.content for chunk in grouped_source_chunks["chunk_list"]
+            )
+
+            # details se reinicia vacío cada vez que termina el bucle
+            details = []
+            # Bucle para recorrer las parejas CLAVE-VALOR de los distintos diccionarios details
+            for details_key, details_value in grouped_source_chunks["details"].items():
+                if details_value is None:
+                    rendered_value = "(sin datos)"
+                elif isinstance(details_value, datetime):
+                    rendered_value = details_value.isoformat()
+                else:
+                    rendered_value = str(details_value)
+                # Escribe el metadato en texto común legible
+                details.append(f"{details_key.replace('_', ' ').title()}: {rendered_value}")
+            # Une los textos de los metadatos
+            details_block = "\n".join(details)
+            if details_block:
+                details_block = f"{details_block}\n"
+
+            source_blocks.append(
+                f"\nFUENTE {source_number}\n"
+                f"Origin: {grouped_source_chunks['origin']}\n"
+                f"{details_block}"
+                f"Content: {joined_chunks}"
+            )
+
+        return "\n---\n".join(source_blocks)
 
     async def generate_answer(
         self, question_in: QuestionBase, augmented_chunk_groups: list[AugmentedChunksGroup]
     ) -> str:
-        # Orquesta aquí otro método de la clase para pasar el contexto a texto plano
+        """
+        Generación de la respuesta.
+        """
+        logger.info("Generating answer")
+
+        # Orquesta aquí otros métodos de la clase para pasar el contexto a texto plano
         prompt_context = self.build_prompt_context(augmented_chunk_groups)
-        return await ask_question(
-            question_in, prompt_context, self.max_retries, self.wait_seconds
-        )
+        messages = _build_messages(question_in, prompt_context)
+
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                response = await client.chat.completions.create(
+                    model=settings.GENERATION_MODEL,
+                    messages=messages,
+                )
+                break
+            except Exception as exc:
+                logger.warning(
+                    "Generation failed (attempt %s/%s): %s", attempt, self.max_retries, exc
+                )
+                if attempt == self.max_retries:
+                    raise RuntimeError("Answer generation failed") from exc
+                await asyncio.sleep(self.wait_seconds * attempt)
+
+        return response.choices[0].message.content or ""
