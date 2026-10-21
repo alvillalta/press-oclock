@@ -1,28 +1,35 @@
 import asyncio
 import json
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
+from fastapi import UploadFile
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlmodel import Session, delete, select
 
 from app import crud
+from app.api.routes import mails as mails_route
 from app.core.config import settings
+from app.ingestion.attachment_processing import AttachmentProcessingService
+from app.ingestion.extraction import get_attachment_mime_type
 from app.models import (
     Attachment,
     AttachmentStage,
+    AttachmentUpload,
     Chunk,
     ChunkBase,
     ChunkCreate,
     Mail,
     MailStage,
+    MailStageCreate,
     Source,
     StorageCleanup,
 )
-from app.services.mail_service import MailService
+from app.rag.embedding import EmbeddingResponseError
+from app.services.mail_ingestion_service import MailIngestionService
 from app.services.storage_cleanup_service import StorageCleanupService
 from tests.utils.mail import create_random_mail
 from tests.utils.user import create_random_user
@@ -177,7 +184,7 @@ def test_delete_mail_cleans_attachment_sources_chunks_and_storage(
 
 
 class FakeEmbeddingService:
-    async def create_chunk_embeddings(
+    async def generate_chunk_embeddings(
         self, chunks: list[ChunkBase]
     ) -> list[ChunkCreate]:
         return [
@@ -191,18 +198,37 @@ class FakeEmbeddingService:
 
 
 class FakeAttachmentStorage:
-    def __init__(self, fail_uploads: int = 0) -> None:
+    def __init__(
+        self,
+        fail_uploads: int = 0,
+        poison_paths: set[str] | None = None,
+        fail_batch: bool = False,
+        on_upload: Callable[[str], None] | None = None,
+    ) -> None:
         self.fail_uploads = fail_uploads
+        # Paths que siempre fallan al borrarse (simulan un registro veneno)
+        self.poison_paths = set(poison_paths or ())
+        # Fuerza el fallo del borrado por lote (len > 1)
+        self.fail_batch = fail_batch
+        # Hook opcional para simular efectos externos durante la subida (p. ej. borrar el stage)
+        self.on_upload = on_upload
         self.expires_in = 120
         self.upload_calls: list[tuple[str, bytes, str]] = []
         self.removed_paths: list[str] = []
 
     async def upload(self, path: str, content: bytes, mime_type: str) -> None:
         self.upload_calls.append((path, content, mime_type))
+        if self.on_upload is not None:
+            self.on_upload(path)
         if len(self.upload_calls) <= self.fail_uploads:
             raise RuntimeError("temporary storage error")
 
     async def remove(self, paths: list[str]) -> None:
+        # Simula el fallo del lote completo o de un path veneno concreto
+        if (self.fail_batch and len(paths) > 1) or any(
+            path in self.poison_paths for path in paths
+        ):
+            raise RuntimeError("storage removal failed")
         self.removed_paths.extend(paths)
 
     async def download(self, _path: str) -> bytes:
@@ -214,21 +240,37 @@ class FakeAttachmentStorage:
         return f"https://storage.example/{path}?expires={self.expires_in}&download={download_filename}"
 
 
-def test_mail_service_classifies_supported_and_unsupported_attachment_types() -> None:
-    service = MailService(session=None)  # type: ignore[arg-type]
-
-    assert service._get_or_create_attachment_type("brief.pdf", "application/pdf") == (
+def test_get_attachment_mime_type_classifies_supported_and_unsupported_types() -> None:
+    assert get_attachment_mime_type("brief.pdf", "application/pdf") == (
         "application/pdf",
         None,
     )
-    assert service._get_or_create_attachment_type("notes.md", "text/plain") == (
+    assert get_attachment_mime_type("notes.md", "text/plain") == (
         "text/plain",
         None,
     )
-    assert service._get_or_create_attachment_type("photo.png", "image/png") == (
+    assert get_attachment_mime_type("photo.png", "image/png") == (
         None,
-        "unsupported_type",
+        "Unsupported file type",
     )
+
+
+def test_attachment_upload_accepts_route_fields() -> None:
+    upload = AttachmentUpload(
+        external_id="gmail-attachment-1",
+        filename="brief.pdf",
+        mime_type="application/pdf",
+        content=b"%PDF sample",
+        oversize=False,
+        measured_size=11,
+    )
+
+    assert upload.external_id == "gmail-attachment-1"
+    assert upload.filename == "brief.pdf"
+    assert upload.mime_type == "application/pdf"
+    assert upload.content == b"%PDF sample"
+    assert upload.oversize is False
+    assert upload.measured_size == 11
 
 
 def _ingest_form(
@@ -250,11 +292,11 @@ def test_ingest_mail_creates_source_and_chunks(
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
     monkeypatch.setattr(
-        "app.services.mail_service.EmbeddingService",
+        "app.ingestion.indexing.EmbeddingService",
         FakeEmbeddingService,
     )
     mail_payload = {
-        "external_id": "gmail-message-body-1",
+        "external_id": "msg-body-1",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Mail with a body",
@@ -262,7 +304,7 @@ def test_ingest_mail_creates_source_and_chunks(
     }
 
     response = client.post(
-        f"{settings.API_STR}/mails/ingest",
+        f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(mail_payload),
     )
@@ -295,17 +337,17 @@ def test_ingest_mail_without_body_does_not_create_chunks(
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
 
     class EmbeddingServiceMustNotRun:
-        async def create_chunk_embeddings(
+        async def generate_chunk_embeddings(
             self, chunks: list[ChunkBase]
         ) -> list[ChunkCreate]:
             raise AssertionError("Empty mail bodies should not be embedded")
 
     monkeypatch.setattr(
-        "app.services.mail_service.EmbeddingService",
+        "app.ingestion.indexing.EmbeddingService",
         EmbeddingServiceMustNotRun,
     )
     mail_payload = {
-        "external_id": "gmail-message-without-body-1",
+        "external_id": "msg-nobody-1",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Mail without a body",
@@ -313,7 +355,7 @@ def test_ingest_mail_without_body_does_not_create_chunks(
     }
 
     response = client.post(
-        f"{settings.API_STR}/mails/ingest",
+        f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(mail_payload),
     )
@@ -338,16 +380,16 @@ def test_ingest_mail_persists_attachment_and_defers_extraction(
     webhook_user = create_random_user(db)
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://storage.example")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
     storage = FakeAttachmentStorage()
-    monkeypatch.setattr("app.services.mail_service.AttachmentStorage", lambda: storage)
+    monkeypatch.setattr("app.services.mail_ingestion_service.AttachmentStorage", lambda: storage)
     monkeypatch.setattr(
-        "app.services.mail_service.EmbeddingService", FakeEmbeddingService
+        "app.ingestion.indexing.EmbeddingService", FakeEmbeddingService
     )
 
     def index_attachment_text_must_not_run(
-        _self: MailService,
+        _self: AttachmentProcessingService,
         *,
         attachment_id: uuid.UUID,  # noqa: ARG001
         extraction: str,  # noqa: ARG001
@@ -355,11 +397,13 @@ def test_ingest_mail_persists_attachment_and_defers_extraction(
         raise AssertionError("Attachment extraction is out of scope for this version")
 
     monkeypatch.setattr(
-        MailService, "index_attachment_text", index_attachment_text_must_not_run
+        AttachmentProcessingService,
+        "index_attachment_text",
+        index_attachment_text_must_not_run,
     )
 
     mail_payload = {
-        "external_id": "gmail-message-with-attachment-1",
+        "external_id": "msg-attach-1",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Mail with attachment",
@@ -367,7 +411,7 @@ def test_ingest_mail_persists_attachment_and_defers_extraction(
     }
 
     response = client.post(
-        f"{settings.API_STR}/mails/ingest",
+        f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(mail_payload, ["gmail-attachment-1"]),
         files=[("files", ("brief.pdf", b"%PDF sample", "application/pdf"))],
@@ -435,15 +479,26 @@ def test_repeated_ingest_does_not_duplicate_records(
     webhook_user = create_random_user(db)
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://storage.example")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
     storage = FakeAttachmentStorage()
-    monkeypatch.setattr("app.services.mail_service.AttachmentStorage", lambda: storage)
+    monkeypatch.setattr("app.services.mail_ingestion_service.AttachmentStorage", lambda: storage)
     monkeypatch.setattr(
-        "app.services.mail_service.EmbeddingService", FakeEmbeddingService
+        "app.ingestion.indexing.EmbeddingService", FakeEmbeddingService
     )
+
+    # Cuenta las lecturas de archivo para comprobar que un correo duplicado no consume adjuntos
+    read_upload_calls = {"count": 0}
+    original_read_upload = mails_route._read_upload
+
+    async def counting_read_upload(upload: UploadFile) -> tuple[bytes, int, bool]:
+        read_upload_calls["count"] += 1
+        return await original_read_upload(upload)
+
+    monkeypatch.setattr(mails_route, "_read_upload", counting_read_upload)
+
     mail_payload = {
-        "external_id": "gmail-message-repeated-1",
+        "external_id": "msg-repeat-1",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Repeated ingestion",
@@ -456,11 +511,15 @@ def test_repeated_ingest_does_not_duplicate_records(
     }
 
     first_response = client.post(
-        f"{settings.API_STR}/mails/ingest", **request_kwargs
+        f"{settings.API_STR}/mails/ingest-mail", **request_kwargs
     )
+    assert read_upload_calls["count"] == 1
+
     second_response = client.post(
-        f"{settings.API_STR}/mails/ingest", **request_kwargs
+        f"{settings.API_STR}/mails/ingest-mail", **request_kwargs
     )
+    # El segundo request no debe leer los adjuntos: la ingesta ya está completada
+    assert read_upload_calls["count"] == 1
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
@@ -482,7 +541,7 @@ def test_ingest_rejects_mismatched_attachment_ids(
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
     mail_payload = {
-        "external_id": "gmail-message-mismatched-1",
+        "external_id": "msg-mismatch-1",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Mismatched ids",
@@ -490,7 +549,7 @@ def test_ingest_rejects_mismatched_attachment_ids(
     }
 
     response = client.post(
-        f"{settings.API_STR}/mails/ingest",
+        f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(
             mail_payload, ["gmail-attachment-1", "gmail-attachment-2"]
@@ -502,6 +561,83 @@ def test_ingest_rejects_mismatched_attachment_ids(
     assert response.json()["detail"] == "attachment_external_ids must have the same length as files"
 
 
+@pytest.mark.parametrize(
+    ("external_id", "expected_status"),
+    [("a" * 16, 200), ("a" * 17, 422)],
+)
+def test_ingest_enforces_mail_external_id_limit(
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    external_id: str,
+    expected_status: int,
+) -> None:
+    webhook_user = create_random_user(db)
+    assert webhook_user.id is not None
+    monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
+    mail_payload = {
+        "external_id": external_id,
+        "sender": "sender@example.com",
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "subject": "External id limit",
+        "body": None,
+    }
+
+    response = client.post(
+        f"{settings.API_STR}/mails/ingest-mail",
+        headers={"X-API-Key": settings.MAKE_API_KEY},
+        data=_ingest_form(mail_payload),
+    )
+
+    assert response.status_code == expected_status
+
+
+@pytest.mark.parametrize(
+    ("attachment_external_id", "expected_status"),
+    [("c" * 1024, 200), ("c" * 1025, 422)],
+)
+def test_ingest_enforces_attachment_external_id_limit(
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    attachment_external_id: str,
+    expected_status: int,
+) -> None:
+    webhook_user = create_random_user(db)
+    assert webhook_user.id is not None
+    monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
+    storage = FakeAttachmentStorage()
+    monkeypatch.setattr(
+        "app.services.mail_ingestion_service.AttachmentStorage", lambda: storage
+    )
+    mail_payload = {
+        "external_id": "b" * 16,
+        "sender": "sender@example.com",
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "subject": "Attachment external id limit",
+        "body": None,
+    }
+
+    response = client.post(
+        f"{settings.API_STR}/mails/ingest-mail",
+        headers={"X-API-Key": settings.MAKE_API_KEY},
+        data=_ingest_form(mail_payload, [attachment_external_id]),
+        files=[("files", ("notes.txt", b"notes", "text/plain"))],
+    )
+
+    assert response.status_code == expected_status
+    if expected_status == 200:
+        assert response.json()["result_summary"]["stored_count"] == 1
+        assert len(storage.upload_calls) == 1
+    else:
+        assert response.json()["detail"] == (
+            "attachment_external_ids must be a JSON array of strings "
+            "between 1 and 1024 characters"
+        )
+
+
 def test_unsupported_attachment_is_omitted_without_upload(
     client: TestClient,
     db: Session,
@@ -510,13 +646,13 @@ def test_unsupported_attachment_is_omitted_without_upload(
     webhook_user = create_random_user(db)
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://storage.example")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
     storage = FakeAttachmentStorage()
-    monkeypatch.setattr("app.services.mail_service.AttachmentStorage", lambda: storage)
+    monkeypatch.setattr("app.services.mail_ingestion_service.AttachmentStorage", lambda: storage)
 
     mail_payload = {
-        "external_id": "gmail-message-unsupported-1",
+        "external_id": "msg-unsup-1",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Unsupported attachment",
@@ -524,7 +660,7 @@ def test_unsupported_attachment_is_omitted_without_upload(
     }
 
     response = client.post(
-        f"{settings.API_STR}/mails/ingest",
+        f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(mail_payload, ["gmail-image-1"]),
         files=[("files", ("photo.png", b"image", "image/png"))],
@@ -560,11 +696,11 @@ def test_storage_upload_retries_three_times_then_omits_attachment(
     webhook_user = create_random_user(db)
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://storage.example")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
     monkeypatch.setattr(settings, "MAIL_ATTACHMENT_STORAGE_RETRIES", 3)
     storage = FakeAttachmentStorage(fail_uploads=3)
-    monkeypatch.setattr("app.services.mail_service.AttachmentStorage", lambda: storage)
+    monkeypatch.setattr("app.services.mail_ingestion_service.AttachmentStorage", lambda: storage)
     monkeypatch.setattr(
         "app.services.storage_cleanup_service.AttachmentStorage", lambda: storage
     )
@@ -572,9 +708,9 @@ def test_storage_upload_retries_three_times_then_omits_attachment(
     async def no_sleep(_seconds: int) -> None:
         return None
 
-    monkeypatch.setattr("app.services.mail_service.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("app.services.mail_ingestion_service.asyncio.sleep", no_sleep)
     mail_payload = {
-        "external_id": "gmail-message-storage-failure",
+        "external_id": "msg-storage-fail",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Storage retry",
@@ -582,7 +718,7 @@ def test_storage_upload_retries_three_times_then_omits_attachment(
     }
 
     response = client.post(
-        f"{settings.API_STR}/mails/ingest",
+        f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(mail_payload, ["gmail-attachment-fails"]),
         files=[("files", ("notes.txt", b"notes", "text/plain"))],
@@ -615,6 +751,279 @@ def test_storage_upload_retries_three_times_then_omits_attachment(
     assert db.exec(select(StorageCleanup)).all() == []
 
 
+def test_stage_disappearing_after_successful_upload_is_a_500_and_cleans_storage(
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    webhook_user = create_random_user(db)
+    assert webhook_user.id is not None
+    monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
+    monkeypatch.setattr(settings, "MAIL_ATTACHMENT_STORAGE_RETRIES", 3)
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+    def delete_stage_after_upload(path: str) -> None:
+        stage_id = uuid.UUID(path.rsplit("/", 1)[-1])
+        db.exec(delete(AttachmentStage).where(AttachmentStage.id == stage_id))
+        db.commit()
+
+    # La subida termina bien, pero el hook borra el stage durante la subida
+    storage = FakeAttachmentStorage(on_upload=delete_stage_after_upload)
+    monkeypatch.setattr(
+        "app.services.mail_ingestion_service.AttachmentStorage", lambda: storage
+    )
+
+    async def no_sleep(_seconds: int) -> None:
+        return None
+
+    monkeypatch.setattr("app.services.mail_ingestion_service.asyncio.sleep", no_sleep)
+    mail_payload = {
+        "external_id": "msg-vanishes-1",
+        "sender": "sender@example.com",
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "subject": "Stage vanishes",
+        "body": None,
+    }
+
+    response = client.post(
+        f"{settings.API_STR}/mails/ingest-mail",
+        headers={"X-API-Key": settings.MAKE_API_KEY},
+        data=_ingest_form(mail_payload, ["gmail-attachment-stage-gone"]),
+        files=[("files", ("notes.txt", b"notes", "text/plain"))],
+    )
+
+    # Inconsistencia interna: 500 y sin reintentar el error como si fuera un fallo de Storage
+    assert response.status_code == 500
+    assert len(storage.upload_calls) == 1
+    db.expire_all()
+    assert len(db.exec(select(StorageCleanup)).all()) == 1
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+
+def test_stage_disappearing_after_exhausted_uploads_is_a_500_and_cleans_storage(
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    webhook_user = create_random_user(db)
+    assert webhook_user.id is not None
+    monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
+    monkeypatch.setattr(settings, "MAIL_ATTACHMENT_STORAGE_RETRIES", 3)
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+    def delete_stage_after_upload(path: str) -> None:
+        stage_id = uuid.UUID(path.rsplit("/", 1)[-1])
+        db.exec(delete(AttachmentStage).where(AttachmentStage.id == stage_id))
+        db.commit()
+
+    storage = FakeAttachmentStorage(fail_uploads=3, on_upload=delete_stage_after_upload)
+    monkeypatch.setattr(
+        "app.services.mail_ingestion_service.AttachmentStorage", lambda: storage
+    )
+
+    async def no_sleep(_seconds: int) -> None:
+        return None
+
+    monkeypatch.setattr("app.services.mail_ingestion_service.asyncio.sleep", no_sleep)
+    mail_payload = {
+        "external_id": "msg-vanish-exh",
+        "sender": "sender@example.com",
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "subject": "Stage vanishes on exhaustion",
+        "body": None,
+    }
+
+    response = client.post(
+        f"{settings.API_STR}/mails/ingest-mail",
+        headers={"X-API-Key": settings.MAKE_API_KEY},
+        data=_ingest_form(mail_payload, ["gmail-attachment-stage-gone-on-fail"]),
+        files=[("files", ("notes.txt", b"notes", "text/plain"))],
+    )
+
+    assert response.status_code == 500
+    assert len(storage.upload_calls) == 3
+    db.expire_all()
+    assert len(db.exec(select(StorageCleanup)).all()) == 1
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+
+def test_persistence_error_after_upload_is_not_retried_as_storage_failure(
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    webhook_user = create_random_user(db)
+    assert webhook_user.id is not None
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
+    storage = FakeAttachmentStorage()
+    service = MailIngestionService(session=db, storage=storage)  # type: ignore[arg-type]
+    mail_in = MailStageCreate(
+        external_id="msg-persist-err",
+        sender="sender@example.com",
+        received_at=datetime.now(timezone.utc),
+        subject="Persist error",
+        body=None,
+    )
+    stage = service.start_ingestion(mail_in=mail_in, user_id=webhook_user.id)
+    assert stage.ingestion_id is not None
+
+    original_commit = Session.commit
+    commit_calls = {"count": 0}
+
+    def failing_commit(self: Session) -> None:
+        commit_calls["count"] += 1
+        # El primer commit persiste el stage; el segundo guarda el estado "stored"
+        if commit_calls["count"] == 2:
+            raise RuntimeError("database unavailable")
+        original_commit(self)
+
+    monkeypatch.setattr(Session, "commit", failing_commit)
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        asyncio.run(
+            service.stage_attachment(
+                ingestion_id=stage.ingestion_id,
+                user_id=webhook_user.id,
+                external_id="gmail-attachment-persist-error",
+                filename="notes.txt",
+                mime_type="text/plain",
+                content=b"notes",
+                measured_size=5,
+            )
+        )
+
+    # Un fallo de persistencia no se interpreta como fallo de Storage: no hay reintentos
+    assert len(storage.upload_calls) == 1
+    db.rollback()
+
+
+def test_storage_cleanup_isolates_poison_record(db: Session) -> None:
+    db.exec(delete(StorageCleanup))
+    db.commit()
+    good_path = "mails/cleanup/good"
+    poison_path = "mails/cleanup/poison"
+    db.add(StorageCleanup(storage_path=good_path))
+    db.add(StorageCleanup(storage_path=poison_path))
+    db.commit()
+    storage = FakeAttachmentStorage(poison_paths={poison_path})
+
+    cleaned_count = asyncio.run(
+        StorageCleanupService(
+            session=db, storage=storage  # type: ignore[arg-type]
+        ).process_pending()
+    )
+
+    # El lote falla por el veneno, pero el buen registro se limpia igualmente en el fallback
+    assert cleaned_count == 1
+    assert storage.removed_paths == [good_path]
+    db.expire_all()
+    remaining = db.exec(select(StorageCleanup)).all()
+    assert [record.storage_path for record in remaining] == [poison_path]
+    assert remaining[0].attempt_count == 1
+    assert remaining[0].last_error is not None
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+
+def test_storage_cleanup_dead_letters_record_and_advances_queue(db: Session) -> None:
+    db.exec(delete(StorageCleanup))
+    db.commit()
+    poison_path = "mails/cleanup/poison"
+    db.add(StorageCleanup(storage_path=poison_path))
+    db.commit()
+    storage = FakeAttachmentStorage(poison_paths={poison_path})
+    service = StorageCleanupService(
+        session=db, storage=storage, max_attempts=3  # type: ignore[arg-type]
+    )
+
+    for _ in range(3):
+        asyncio.run(service.process_pending())
+
+    db.expire_all()
+    poison_record = db.exec(
+        select(StorageCleanup).where(StorageCleanup.storage_path == poison_path)
+    ).first()
+    assert poison_record is not None
+    assert poison_record.attempt_count == 3
+    assert poison_record.last_error is not None
+
+    # Al llegar al cap, el registro deja de seleccionarse y la cola avanza
+    other_path = "mails/cleanup/other"
+    db.add(StorageCleanup(storage_path=other_path))
+    db.commit()
+
+    cleaned_count = asyncio.run(service.process_pending())
+    assert cleaned_count == 1
+    assert other_path in storage.removed_paths
+    db.expire_all()
+    remaining = db.exec(select(StorageCleanup)).all()
+    assert [record.storage_path for record in remaining] == [poison_path]
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+
+def test_storage_cleanup_retries_per_record_when_batch_fails(db: Session) -> None:
+    db.exec(delete(StorageCleanup))
+    db.commit()
+    paths = ["mails/cleanup/a", "mails/cleanup/b"]
+    for path in paths:
+        db.add(StorageCleanup(storage_path=path))
+    db.commit()
+    storage = FakeAttachmentStorage(fail_batch=True)
+
+    cleaned_count = asyncio.run(
+        StorageCleanupService(
+            session=db, storage=storage  # type: ignore[arg-type]
+        ).process_pending()
+    )
+
+    # Si el lote falla pero cada registro por separado funciona, no se marca ningún intento
+    assert cleaned_count == len(paths)
+    assert sorted(storage.removed_paths) == sorted(paths)
+    db.expire_all()
+    assert db.exec(select(StorageCleanup)).all() == []
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+
+def test_storage_cleanup_continues_after_failed_batch(db: Session) -> None:
+    db.exec(delete(StorageCleanup))
+    db.commit()
+    poison_path = "mails/cleanup/poison"
+    good_paths = ["mails/cleanup/good-0", "mails/cleanup/good-1", "mails/cleanup/good-2"]
+    base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    # El veneno es el más antiguo; los buenos van después (created_at explícito para ordenar)
+    db.add(StorageCleanup(storage_path=poison_path, created_at=base_time))
+    for offset, path in enumerate(good_paths, start=1):
+        db.add(StorageCleanup(storage_path=path, created_at=base_time + timedelta(seconds=offset)))
+    db.commit()
+    storage = FakeAttachmentStorage(poison_paths={poison_path})
+    service = StorageCleanupService(
+        session=db, storage=storage, limit=2  # type: ignore[arg-type]
+    )
+
+    cleaned_count = asyncio.run(service.process_pending())
+
+    # El fallo del primer lote no corta la corrida: los buenos de lotes posteriores se limpian igual
+    assert cleaned_count == len(good_paths)
+    assert sorted(storage.removed_paths) == sorted(good_paths)
+    db.expire_all()
+    remaining = db.exec(select(StorageCleanup)).all()
+    assert [record.storage_path for record in remaining] == [poison_path]
+    # El veneno cuenta un único intento por corrida (no tres dentro de la misma)
+    assert remaining[0].attempt_count == 1
+    db.exec(delete(StorageCleanup))
+    db.commit()
+
+
 def test_embedding_failure_keeps_stages_for_retry(
     client: TestClient,
     db: Session,
@@ -623,22 +1032,22 @@ def test_embedding_failure_keeps_stages_for_retry(
     webhook_user = create_random_user(db)
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://storage.example")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
     storage = FakeAttachmentStorage()
-    monkeypatch.setattr("app.services.mail_service.AttachmentStorage", lambda: storage)
+    monkeypatch.setattr("app.services.mail_ingestion_service.AttachmentStorage", lambda: storage)
 
     class FailingEmbeddingService:
-        async def create_chunk_embeddings(
+        async def generate_chunk_embeddings(
             self, chunks: list[ChunkBase]
         ) -> list[ChunkCreate]:
             raise RuntimeError("embedding provider unavailable")
 
     monkeypatch.setattr(
-        "app.services.mail_service.EmbeddingService", FailingEmbeddingService
+        "app.ingestion.indexing.EmbeddingService", FailingEmbeddingService
     )
     mail_payload = {
-        "external_id": "gmail-message-embedding-failure",
+        "external_id": "msg-embed-fail",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Embedding failure",
@@ -651,7 +1060,7 @@ def test_embedding_failure_keeps_stages_for_retry(
     }
 
     with pytest.raises(RuntimeError):
-        client.post(f"{settings.API_STR}/mails/ingest", **request_kwargs)
+        client.post(f"{settings.API_STR}/mails/ingest-mail", **request_kwargs)
 
     db.expire_all()
     stage = db.exec(
@@ -671,10 +1080,10 @@ def test_embedding_failure_keeps_stages_for_retry(
     )
 
     monkeypatch.setattr(
-        "app.services.mail_service.EmbeddingService", FakeEmbeddingService
+        "app.ingestion.indexing.EmbeddingService", FakeEmbeddingService
     )
     retry_response = client.post(
-        f"{settings.API_STR}/mails/ingest", **request_kwargs
+        f"{settings.API_STR}/mails/ingest-mail", **request_kwargs
     )
 
     assert retry_response.status_code == 200
@@ -689,6 +1098,60 @@ def test_embedding_failure_keeps_stages_for_retry(
     assert len(db.exec(select(Attachment).where(Attachment.mail_id == mail.id)).all()) == 1
 
 
+def test_embedding_dimension_mismatch_returns_502_and_keeps_stage_for_retry(
+    client: TestClient,
+    db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    webhook_user = create_random_user(db)
+    assert webhook_user.id is not None
+    monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
+    storage = FakeAttachmentStorage()
+    monkeypatch.setattr("app.services.mail_ingestion_service.AttachmentStorage", lambda: storage)
+
+    class MismatchedEmbeddingService:
+        async def generate_chunk_embeddings(
+            self, chunks: list[ChunkBase]
+        ) -> list[ChunkCreate]:
+            raise EmbeddingResponseError(
+                "Expected an embedding with 1536 dimensions, got 3."
+            )
+
+    monkeypatch.setattr(
+        "app.ingestion.indexing.EmbeddingService", MismatchedEmbeddingService
+    )
+    mail_payload = {
+        "external_id": "msg-embed-mism",
+        "sender": "sender@example.com",
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "subject": "Embedding mismatch",
+        "body": "This body cannot be embedded yet.",
+    }
+
+    response = client.post(
+        f"{settings.API_STR}/mails/ingest-mail",
+        headers={"X-API-Key": settings.MAKE_API_KEY},
+        data=_ingest_form(mail_payload, ["gmail-attachment-embedding-mismatch"]),
+        files=[("files", ("notes.txt", b"notes", "text/plain"))],
+    )
+
+    # Respuesta de embeddings incompatible: 502 (no 409/500) y el stage queda reintentable
+    assert response.status_code == 502
+    db.expire_all()
+    stage = db.exec(
+        select(MailStage).where(MailStage.external_id == mail_payload["external_id"])
+    ).one()
+    assert stage.status == "receiving"
+    assert (
+        db.exec(
+            select(Mail).where(Mail.external_id == mail_payload["external_id"])
+        ).first()
+        is None
+    )
+
+
 def test_ingest_enforces_combined_attachment_limit(
     client: TestClient,
     db: Session,
@@ -697,14 +1160,14 @@ def test_ingest_enforces_combined_attachment_limit(
     webhook_user = create_random_user(db)
     assert webhook_user.id is not None
     monkeypatch.setattr(settings, "MAIL_WEBHOOK_USER_ID", webhook_user.id)
-    monkeypatch.setattr(settings, "SUPABASE_URL", "https://storage.example")
-    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_URL", "https://storage.example")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_KEY", "test-key")
     monkeypatch.setattr(settings, "MAIL_ATTACHMENT_MAX_BYTES", 5)
     storage = FakeAttachmentStorage()
-    monkeypatch.setattr("app.services.mail_service.AttachmentStorage", lambda: storage)
+    monkeypatch.setattr("app.services.mail_ingestion_service.AttachmentStorage", lambda: storage)
 
     mail_payload = {
-        "external_id": "gmail-message-total-limit",
+        "external_id": "msg-total-limit",
         "sender": "sender@example.com",
         "received_at": datetime.now(timezone.utc).isoformat(),
         "subject": "Combined size limit",
@@ -712,7 +1175,7 @@ def test_ingest_enforces_combined_attachment_limit(
     }
 
     response = client.post(
-        f"{settings.API_STR}/mails/ingest",
+        f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(mail_payload, ["gmail-small-file", "gmail-over-limit-file"]),
         files=[
@@ -793,7 +1256,7 @@ async def test_expired_mail_stage_removes_staged_object(
     assert user.id is not None
     storage_path = "mails/staging/expired-file"
     stage = MailStage(
-        external_id=f"expired-{uuid.uuid4()}",
+        external_id=f"exp-{uuid.uuid4().hex[:12]}",
         user_id=user.id,
         sender="sender@example.com",
         received_at=datetime.now(timezone.utc),
@@ -815,11 +1278,10 @@ async def test_expired_mail_stage_removes_staged_object(
     )
     db.commit()
     storage = FakeAttachmentStorage()
+    service = StorageCleanupService(session=db, storage=storage)  # type: ignore[arg-type]
 
-    expired_count = await MailService(session=db).cleanup_expired_ingestions()
-    cleanup_count = await StorageCleanupService(
-        session=db, storage=storage  # type: ignore[arg-type]
-    ).process_pending()
+    expired_count = await service.cleanup_expired_ingestions()
+    cleanup_count = await service.process_pending()
 
     assert expired_count == 1
     assert cleanup_count == 1

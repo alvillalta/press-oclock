@@ -36,14 +36,3 @@ def get_citations(
 
         return citations
 
-
-class CitationService:
-    """Servicio para construir las citas de las fuentes de una respuesta."""
-
-    def get_citations_metadata(
-            self,
-            similar_chunks: list[Chunk],
-            augmented_chunk_groups: list[AugmentedChunksGroup],
-        ) -> list[SourceCitation]:
-            return get_citations(similar_chunks, augmented_chunk_groups)
-

@@ -57,15 +57,15 @@ jobs:
           version: "0.11.4"
           cache-dependency-glob: |
             requirements**.txt
-            pyproject.toml
-            uv.lock
+            backend/pyproject.toml
+            backend/uv.lock
       - name: Install backend dependencies
-        run: uv sync --all-packages
+        run: uv sync --project backend
       - name: Install frontend dependencies
         run: bun ci
       - name: Run prek - pre-commit
         id: precommit
-        run: uv run prek run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
+        run: uv run --project backend prek run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
         continue-on-error: true
       - name: Commit and push changes
         if: env.HAS_SECRETS == 'true'

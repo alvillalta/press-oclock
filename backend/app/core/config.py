@@ -108,11 +108,11 @@ class Settings(BaseSettings):
 
     MAIL_ATTACHMENT_MAX_BYTES: int = 5_000_000
     MAIL_ATTACHMENT_STORAGE_RETRIES: int = 3
-    MAIL_STAGE_TTL_HOURS: int = 24
+    MAIL_STAGE_RETENTION_HOURS: int = 24
     MAIL_STAGE_RETENTION_DAYS: int = 30
 
-    SUPABASE_URL: HttpUrl | None = None
-    SUPABASE_SERVICE_ROLE_KEY: str | None = None
+    SUPABASE_STORAGE_URL: HttpUrl | None = None
+    SUPABASE_STORAGE_KEY: str | None = None
     SUPABASE_STORAGE_BUCKET: str = "mail-attachments"
 
     OPENAI_API_KEY: str
@@ -140,6 +140,18 @@ class Settings(BaseSettings):
             "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
         )
 
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_supabase_storage_pair(self) -> Self:
+        url_present = bool(self.SUPABASE_STORAGE_URL)
+        key_present = bool(self.SUPABASE_STORAGE_KEY)
+        if url_present != key_present:
+            missing = "SUPABASE_STORAGE_KEY" if url_present else "SUPABASE_STORAGE_URL"
+            raise ValueError(
+                "Supabase Storage requires both SUPABASE_STORAGE_URL and "
+                f"SUPABASE_STORAGE_KEY, but {missing} is not set."
+            )
         return self
 
 

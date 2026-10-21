@@ -1,11 +1,13 @@
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app import crud
 from app.core.config import settings
 from app.models import Question, User
+from app.rag.embedding import EmbeddingResponseError
 from tests.utils.user import create_random_user
 
 
@@ -109,3 +111,31 @@ def test_superuser_can_delete_question(
     assert response.json() == {"message": "Question deleted successfully"}
     db.expire_all()
     assert db.get(Question, question_id) is None
+
+
+def test_create_question_embedding_mismatch_returns_502(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingRagService:
+        def __init__(self, session: object) -> None:
+            self.session = session
+
+        async def answer_question(
+            self, *, question_in: str, user_id: uuid.UUID
+        ) -> None:
+            raise EmbeddingResponseError(
+                "Expected an embedding with 1536 dimensions, got 3."
+            )
+
+    monkeypatch.setattr("app.api.routes.questions.RagService", FailingRagService)
+
+    response = client.post(
+        f"{settings.API_STR}/questions/",
+        headers=normal_user_token_headers,
+        json="What is in my inbox?",
+    )
+
+    # Respuesta de embeddings incompatible: 502 (no 500)
+    assert response.status_code == 502

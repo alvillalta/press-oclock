@@ -23,7 +23,6 @@ class UserBase(SQLModel):
     full_name: str | None = Field(default=None, max_length=255)
 
 
-# Propiedades a recibir vía API
 class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=128)
 
@@ -51,7 +50,6 @@ class UpdatePassword(SQLModel):
 
 
 class User(UserBase, table=True):
-    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     created_at: datetime | None = Field(
@@ -64,13 +62,14 @@ class User(UserBase, table=True):
     )
 
 
-# Propiedades a devolver vía API
 class UserPublic(UserBase):
+    """Propiedades a devolver vía API de un usuario."""
     id: uuid.UUID
     created_at: datetime | None = None
 
 
 class UsersPublic(SQLModel):
+    """Propiedades a devolver vía API de varios usuarios."""
     data: list[UserPublic]
     count: int
 
@@ -78,7 +77,6 @@ class UsersPublic(SQLModel):
 # SOURCE
 
 class Source(SQLModel, table=True):
-    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     origin: str = Field(max_length=50, index=True)
     user_id: uuid.UUID = Field(
@@ -99,6 +97,7 @@ class Source(SQLModel, table=True):
 
 
 class SourceCitation(SQLModel):
+    """Propiedades a devolver vía API para la citación de fuentes en la respuesta a la pregunta de un usuario."""
     source_id: uuid.UUID
     origin: str
     content: str = Field(
@@ -110,30 +109,28 @@ class SourceCitation(SQLModel):
 
 
 # MAIL
-
+# No recibe external_id ni body por no mostrarlos en MailPublic que hereda este MailBase. 
+# Esto también implica por qué los stages aparecen más adelante en este archivo dado que MailStagePublic sí muestra external_id (solo podría verlo el admin, no lo expone al usuario)
 class MailBase(SQLModel):
     subject: str | None = Field(default=None, max_length=255)
     sender: EmailStr = Field(max_length=255)
     received_at: datetime = Field(sa_type=DateTime(timezone=True))
 
 
-# Propiedades a recibir vía API
 class MailCreate(MailBase):
-    body: str | None = Field(default=None)
+    external_id: str = Field(min_length=1, max_length=16)
+    body: str | None = Field(default=None, max_length=5000000)
 
 
-class Mail(MailBase, table=True):
-    """Database model"""
+class Mail(MailCreate, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
-    external_id: str | None = Field(default=None, max_length=255)
+    user: User | None = Relationship(back_populates="mails")
     source_id: uuid.UUID = Field(
         foreign_key="source.id", nullable=False, unique=True, ondelete="CASCADE"
     )
-    body: str | None = Field(default=None)
-    user: User | None = Relationship(back_populates="mails")
     source: Source | None = Relationship(
         back_populates="mail",
     )
@@ -145,12 +142,13 @@ class Mail(MailBase, table=True):
         sa_type=DateTime(timezone=True),
     )
     __table_args__ = (
+        # Condición de refuerzo en la db para que un mismo usuario no pueda tener dos correos con el mismo external_id (Gmail los genera en función de la bandeja de entrada)
         UniqueConstraint("user_id", "external_id", name="uq_mail_user_external_id"),
     )
 
 
-# Propiedades a devolver vía API
 class MailPublic(MailBase):
+    """Propiedades a devolver vía API para la vista de lista de correos en frontend."""
     id: uuid.UUID
     user_id: uuid.UUID
     source_id: uuid.UUID
@@ -159,6 +157,7 @@ class MailPublic(MailBase):
 
 
 class AttachmentPublic(SQLModel):
+    """Propiedades a devolver de Attachment."""
     id: uuid.UUID
     filename: str
     mime_type: str
@@ -167,6 +166,7 @@ class AttachmentPublic(SQLModel):
 
 
 class MailResponse(MailPublic):
+    """Propiedades a devolver vía API para la vista de lista de correo individual."""
     body: str | None = None
     attachments: list[AttachmentPublic] = Field(default_factory=list)
 
@@ -174,81 +174,100 @@ class MailResponse(MailPublic):
 # ATTACHMENT
 
 class Attachment(SQLModel, table=True):
-    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     mail_id: uuid.UUID = Field(
         foreign_key="mail.id", nullable=False, ondelete="CASCADE"
     )
+    mail: Mail | None = Relationship(back_populates="attachments")
     source_id: uuid.UUID = Field(
         foreign_key="source.id", nullable=False, unique=True, ondelete="CASCADE"
+    )
+    source: Source | None = Relationship(
+        back_populates="attachment",
     )
     filename: str = Field(max_length=255)
     mime_type: str = Field(max_length=255)
     storage_path: str
-    extraction: str | None = Field(default=None)
-    # Estado de la futura extracción de texto (MarkItDown). En esta versión solo se
-    # inicializa; ningún proceso lo modifica todavía.
+    extraction: str | None = Field(default=None, max_length=5000000)
     extraction_status: str = Field(default="pending", max_length=30)
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
     )
-    mail: Mail | None = Relationship(back_populates="attachments")
-    source: Source | None = Relationship(
-        back_populates="attachment",
-    )
 
 
-class MailStageCreate(MailBase):
-    external_id: str = Field(min_length=1, max_length=255)
-    body: str | None = Field(default=None)
+class AttachmentSignedUrl(SQLModel):
+    """Enlace de descarga del archivo de Supabase Storage a devolver vía API."""
+    url: str
+    expires_in: int
 
 
-class MailStage(SQLModel, table=True):
-    """Temporary ingestion record kept until a staged mail is finalized."""
+# MAIL STAGE
 
-    __tablename__ = "mail_stage"
+class MailStageCreate(MailCreate):
+    """Propiedades a recibir vía API (hereda la base de MailCreate)"""
 
+
+class MailStage(MailStageCreate, table=True):
+    """Base de ingesta temporal del correo sobre la que procesar los datos de entrada antes de guardar en la base de datos."""
+    __tablename__ = "mail_stage"  # SQL no convierte CamelCase a snake_case, hay que dárselo ya hecho para nombres compuestos
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    external_id: str = Field(min_length=1, max_length=255)
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
     )
-    subject: str | None = Field(default=None, max_length=255)
-    sender: EmailStr = Field(max_length=255)
-    received_at: datetime = Field(sa_type=DateTime(timezone=True))
-    body: str | None = Field(default=None)
-    status: str = Field(default="receiving", max_length=30)
-    total_size_bytes: int = Field(default=0, ge=0)
     mail_id: uuid.UUID | None = Field(
         default=None,
         foreign_key="mail.id",
         ondelete="CASCADE",
         index=True,
     )
+    attachments: list["AttachmentStage"] = Relationship(
+        back_populates="mail_stage", cascade_delete=True
+    )
+    status: str = Field(default="receiving", max_length=30)
+    total_size_bytes: int = Field(default=0, ge=0)
     result_summary: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     created_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
-    )
-    attachments: list["AttachmentStage"] = Relationship(
-        back_populates="mail_stage", cascade_delete=True
     )
     __table_args__ = (
         UniqueConstraint("user_id", "external_id", name="uq_mail_stage_user_external_id"),
     )
 
 
+class MailStagePublic(SQLModel):
+    """Propiedades a devolver de MailStage."""
+    ingestion_id: uuid.UUID | None = None
+    external_id: str
+    status: str
+    mail_id: uuid.UUID | None = None
+    result_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+# ATTACHMENT UPLOAD
+# Data Transfer Object dedicado a gestionar la subida del archivo del adjunto 
+class AttachmentUpload(SQLModel):
+    """Adjunto ya leído desde la capa HTTP, listo para el staging en la base de datos."""
+    external_id: str
+    filename: str
+    mime_type: str
+    content: bytes
+    oversize: bool
+    measured_size: int
+
+
+# ATTACHMENT STAGE
+
 class AttachmentStage(SQLModel, table=True):
-    """Temporary status and Storage path for one attachment upload."""
-
+    """Base de ingesta temporal del adjunto y su enlace de subida a la base de datos."""
     __tablename__ = "attachment_stage"
-
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    external_id: str = Field(min_length=1, max_length=1024)
     mail_stage_id: uuid.UUID = Field(
         foreign_key="mail_stage.id", nullable=False, ondelete="CASCADE", index=True
     )
-    external_id: str = Field(min_length=1, max_length=255)
+    mail_stage: MailStage | None = Relationship(back_populates="attachments")
     filename: str = Field(max_length=255)
     mime_type: str = Field(max_length=255)
     size_bytes: int = Field(default=0, ge=0)
@@ -260,23 +279,14 @@ class AttachmentStage(SQLModel, table=True):
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),
     )
-    mail_stage: MailStage | None = Relationship(back_populates="attachments")
     __table_args__ = (
-        UniqueConstraint(
-            "mail_stage_id", "external_id", name="uq_attachment_stage_mail_external_id"
-        ),
+        # Condición de refuerzo en la db para que en un correo no pueda haber dos adjuntos con el mismo external_id 
+        UniqueConstraint("mail_stage_id", "external_id", name="uq_attachment_stage_mail_external_id"),
     )
 
 
-class MailStagePublic(SQLModel):
-    ingestion_id: uuid.UUID | None = None
-    external_id: str
-    status: str
-    mail_id: uuid.UUID | None = None
-    result_summary: dict[str, Any] = Field(default_factory=dict)
-
-
 class AttachmentStagePublic(SQLModel):
+    """Propiedades a devolver de AttachmentStage."""
     external_id: str
     status: str
     reason: str | None = None
@@ -284,16 +294,11 @@ class AttachmentStagePublic(SQLModel):
     size_bytes: int
 
 
-class AttachmentSignedUrl(SQLModel):
-    url: str
-    expires_in: int
-
+# STORAGE CLEANUP
 
 class StorageCleanup(SQLModel, table=True):
-    """Durable retry record for deleting an object from Supabase Storage."""
-
+    """Base de registros a eliminar de Supabase Storage"""
     __tablename__ = "storage_cleanup"
-
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     storage_path: str = Field(unique=True, index=True)
     attempt_count: int = Field(default=0, ge=0)
@@ -330,7 +335,6 @@ class ChunkUpdate(SQLModel):
 
 
 class Chunk(ChunkCreate, table=True):
-    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     source_id: uuid.UUID = Field(
         foreign_key="source.id", nullable=False, ondelete="CASCADE"
@@ -341,7 +345,7 @@ class Chunk(ChunkCreate, table=True):
         sa_type=DateTime(timezone=True),
     )
     __table_args__ = (
-        # Condición de refuerzo para que en una misma source no pueda haber dos chunks ocupando la misma posición
+        # Condición de refuerzo en la db para que en una misma source no pueda haber dos chunks ocupando la misma posición
         UniqueConstraint("source_id", "position", name="uq_chunk_source_position"),
     )
 
@@ -377,7 +381,6 @@ class QuestionCreate(SQLModel):
 
 
 class Question(QuestionCreate, table=True):
-    """Database model"""
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"

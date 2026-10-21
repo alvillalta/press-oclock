@@ -105,7 +105,7 @@ export class LoginService {
 export class MailsService {
     /**
      * Read Mails
-     * Retrieve mails.
+     * Trae una lista de correos y un booleano para indicar si tienen adjuntos
      * @param data The data for the request.
      * @param data.skip
      * @param data.limit
@@ -132,12 +132,6 @@ export class MailsService {
      *
      * Make envía el correo y sus archivos juntos. El backend sube los adjuntos y
      * persiste el correo (y los adjuntos que se hayan guardado) antes de responder.
-     *
-     * Ejemplo de petición multipart:
-     * - mail: {"external_id": "gmail-1", "sender": "a@b.com", "received_at": "...",
-     * "subject": "Asunto", "body": "Cuerpo"}
-     * - attachment_external_ids: ["gmail-attachment-1"]
-     * - files: brief.pdf
      * @param data The data for the request.
      * @param data.formData
      * @returns MailStagePublic Successful Response
@@ -146,7 +140,7 @@ export class MailsService {
     public static ingestMail(data: IngestMailData): CancelablePromise<IngestMailResponse> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/mails/ingest',
+            url: '/api/mails/ingest-mail',
             formData: data.formData,
             mediaType: 'multipart/form-data',
             errors: {
@@ -157,7 +151,7 @@ export class MailsService {
     
     /**
      * Read Mail
-     * Recupera un correo por ID así como sus adjuntos.
+     * Recupera un correo por ID así como los metadatos esenciales de sus adjuntos.
      * @param data The data for the request.
      * @param data.id
      * @returns MailResponse Successful Response
@@ -178,7 +172,7 @@ export class MailsService {
     
     /**
      * Delete Mail
-     * Delete a mail.
+     * Borra un correo.
      * @param data The data for the request.
      * @param data.id
      * @returns Message Successful Response
@@ -415,7 +409,7 @@ export class UsersService {
     
     /**
      * Delete User Me
-     * Delete own user.
+     * Borrar el propio usuario.
      * @returns Message Successful Response
      * @throws ApiError
      */
@@ -533,7 +527,7 @@ export class UsersService {
     
     /**
      * Delete User
-     * Delete a user.
+     * Solo para superusuarios: Borra un usuario normal y todos sus datos asociados.
      * @param data The data for the request.
      * @param data.userId
      * @returns Message Successful Response
