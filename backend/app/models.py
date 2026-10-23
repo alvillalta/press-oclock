@@ -236,6 +236,12 @@ class MailStage(MailStageCreate, table=True):
     )
 
 
+class FinalizedMailResult(SQLModel):
+    """Resultado de la finalización de la ingesta de un correo finalize_ingestion()."""
+    mail_id: uuid.UUID
+    finalized_in_this_call: bool
+
+
 class MailStagePublic(SQLModel):
     """Propiedades a devolver de MailStage."""
     ingestion_id: uuid.UUID | None = None

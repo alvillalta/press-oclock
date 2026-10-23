@@ -53,7 +53,7 @@ def test_injected_client_handles_storage_operations_without_credentials(
     monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET", "test-bucket")
     monkeypatch.setattr(
         attachment_storage,
-        "get_supabase_client",
+        "get_supabase_storage_client",
         lambda: pytest.fail("Injected client should be used"),
     )
 
@@ -114,7 +114,7 @@ def test_storage_uses_central_client_provider(
         provider_calls += 1
         return client
 
-    monkeypatch.setattr(attachment_storage, "get_supabase_client", get_client)
+    monkeypatch.setattr(attachment_storage, "get_supabase_storage_client", get_client)
     storage = AttachmentStorage()
 
     asyncio.run(storage.download("folder/file.pdf"))

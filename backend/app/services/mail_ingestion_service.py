@@ -9,14 +9,16 @@ from sqlmodel import Session, col, select
 from app import crud
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.ingestion.extraction import get_attachment_mime_type
-from app.ingestion.indexing import TextIndexingService
+from app.extraction.attachment_processing import AttachmentProcessingService
+from app.extraction.indexing import TextIndexingService
+from app.extraction.mime_types import get_attachment_mime_type
 from app.integrations.attachment_storage import AttachmentStorage
 from app.models import (
     Attachment,
     AttachmentStage,
     AttachmentStagePublic,
     AttachmentUpload,
+    FinalizedMailResult,
     Mail,
     MailCreate,
     MailStage,
@@ -59,6 +61,7 @@ class MailIngestionService:
     ):
         self.session = session
         self.storage = storage or AttachmentStorage()
+        self.attachment_storage_retries: int = 3
 
     async def ingest_mail(
         self,
@@ -92,10 +95,18 @@ class MailIngestionService:
                 measured_size=attachment.measured_size,
             )
 
-        await self.finalize_ingestion(
+        finalized_mail_result = await self.finalize_ingestion(
             ingestion_id=ingestion_id,
             user_id=user_id,
         )
+        # Evalúa finalized_in_this call para procesar únicamente la rama ligada que ha persistido los datos, evitando problemas de concurrencia y de repetición de mails que ya hubiesen sido completados
+        if finalized_mail_result.finalized_in_this_call:
+            try:
+                await AttachmentProcessingService(
+                    session=self.session, storage=self.storage
+                ).process_mail_attachments(mail_id=finalized_mail_result.mail_id)
+            except Exception:
+                logger.exception("Attachment processing failed after mail finalization")
 
         # Devuelve MailStagePublic
         finalized_stage = self.session.get(MailStage, ingestion_id)
@@ -112,7 +123,7 @@ class MailIngestionService:
 
         existing_mail = self.session.exec(
             select(Mail).where(
-                Mail.user_id == user_id, 
+                Mail.user_id == user_id,
                 Mail.external_id == mail_in.external_id
             )
         ).first()
@@ -133,7 +144,7 @@ class MailIngestionService:
         if existing_stage is not None:
             return public_mail_stage(existing_stage)
 
-        # Si no existe Mail ni MailStage en la db, construye la nueva instancia de MailStage 
+        # Si no existe Mail ni MailStage en la db, construye la nueva instancia de MailStage
         stage = MailStage.model_validate(
             mail_in,
             update={"user_id": user_id, "status": "receiving"},
@@ -166,14 +177,14 @@ class MailIngestionService:
         mime_type: str,
         content: bytes,
         oversize: bool = False,
-        measured_size: int 
+        measured_size: int
     ) -> AttachmentStagePublic:
         logger.info("Creating an attachment stage")
         # Trae la instancia de MailStage a la que asociar el adjunto
         mail_stage = self.session.exec(
             select(MailStage)
             .where(MailStage.id == ingestion_id, MailStage.user_id == user_id)
-            # with_for_update() bloquea a las filas seleccionadas de recibir updates hasta que termina la transacción (commit/rollback) 
+            # with_for_update() bloquea a las filas seleccionadas de recibir updates hasta que termina la transacción (commit/rollback)
             .with_for_update()
         ).first()
         if mail_stage is None:
@@ -196,7 +207,7 @@ class MailIngestionService:
         if attachment_stage is None:
             # PurePath interpreta el string como ruta pura
             # .name toma solo el último componente de la ruta del archivo y trunca a no más de 255 caracteres
-            safe_filename = PurePath(filename.replace("\\", "/")).name[:255] 
+            safe_filename = PurePath(filename.replace("\\", "/")).name[:255]
             attachment_stage = AttachmentStage(
                 mail_stage_id=ingestion_id,
                 external_id=external_id,
@@ -209,7 +220,7 @@ class MailIngestionService:
 
         # Normalización del tipo de archivo, cada variable declarada recibe en orden cada elemento de la tupla (aunque venga de un reintento)
         normalized_mime_type, unsupported_reason = get_attachment_mime_type(
-            filename, mime_type  
+            filename, mime_type
         )
 
         # Comprobaciones de tamaño
@@ -230,7 +241,7 @@ class MailIngestionService:
             self.session.commit()
             return public_attachment_stage(attachment_stage)
 
-        # Genera una ruta para el adjunto que apunta a Supabase Storage 
+        # Genera una ruta para el adjunto que apunta a Supabase Storage
         # Comprobación para evitar errores silenciosos a la hora de asignar storage_path
         if not settings.SUPABASE_STORAGE_URL or not settings.SUPABASE_STORAGE_KEY:
             raise RuntimeError("Supabase Storage is not configured")
@@ -251,7 +262,7 @@ class MailIngestionService:
         storage_path = attachment_stage.storage_path
         stored_mime_type = attachment_stage.mime_type
 
-        max_attempts = settings.MAIL_ATTACHMENT_STORAGE_RETRIES
+        max_attempts = self.attachment_storage_retries
         upload_succeeded = False
         for attempt in range(1, max_attempts + 1):
             try:
@@ -271,7 +282,7 @@ class MailIngestionService:
                     max_attempts,
                     exc,
                 )
-                self.session.rollback() 
+                self.session.rollback()
                 if attempt < max_attempts:
                     await asyncio.sleep(attempt)
 
@@ -284,7 +295,7 @@ class MailIngestionService:
                     session=self.session, storage_path=storage_path
                 )
                 self.session.commit()
-                raise MailIngestionError("Attachment stage disappeared during upload") 
+                raise MailIngestionError("Attachment stage disappeared during upload")
             attachment_stage.status = "omitted"
             attachment_stage.reason = "storage_upload_failed"
             attachment_stage.attempt_count = max_attempts
@@ -317,7 +328,9 @@ class MailIngestionService:
         self.session.commit()
         return public_attachment_stage(attachment_stage)
 
-    async def finalize_ingestion(self, ingestion_id: UUID, user_id: UUID) -> Mail:
+    async def finalize_ingestion(
+        self, ingestion_id: UUID, user_id: UUID
+    ) -> FinalizedMailResult:
         logger.info("Setting up mail and attachments from staging")
         # Primera parte de consultas a db para fallar rápido antes del coste/latencia de generar los embeddings
         stage = self.session.exec(
@@ -330,7 +343,10 @@ class MailIngestionService:
         if stage.status == "completed" and stage.mail_id is not None:
             completed_mail = self.session.get(Mail, stage.mail_id)
             if completed_mail is not None:
-                return completed_mail
+                # Correo ya persistido por lo que no se repite su procesamiento de texto
+                return FinalizedMailResult(
+                    mail_id=completed_mail.id, finalized_in_this_call=False
+                )
         if stage.status != "receiving":
             raise ValueError("Mail ingestion cannot be finalized")
 
@@ -376,7 +392,10 @@ class MailIngestionService:
                 completed_mail = self.session.get(Mail, stage.mail_id)
                 if completed_mail is not None:
                     self.session.rollback()  # Libera el bloqueo si ya se ha completado
-                    return completed_mail
+                    # Correo ya persistido por lo que no se repite su procesamiento de texto
+                    return FinalizedMailResult(
+                        mail_id=completed_mail.id, finalized_in_this_call=False
+                    )
             if stage.status != "receiving":
                 raise ValueError("Mail ingestion cannot be finalized")
 
@@ -453,7 +472,9 @@ class MailIngestionService:
             self.session.commit()
             self.session.refresh(db_mail)
             logger.info("Mail ingestion OK")
-            return db_mail
+            return FinalizedMailResult(
+                mail_id=db_mail.id, finalized_in_this_call=True
+            )
         except IntegrityError:
             # Salta si se está creando un correo duplicado para evitar concurrencia (UniqueConstraint de Mail al hacer flush())
             self.session.rollback()
@@ -462,8 +483,11 @@ class MailIngestionService:
                     Mail.user_id == user_id, Mail.external_id == external_id
                 )
             ).first()
+            # Esta rama no es la que ha persistido por lo que no es la dueña de los efectos posteriores, de ahí finalized_in_this_call=False
             if existing_mail is not None:
-                return existing_mail
+                return FinalizedMailResult(
+                    mail_id=existing_mail.id, finalized_in_this_call=False
+                )
             raise
         except Exception:
             self.session.rollback()

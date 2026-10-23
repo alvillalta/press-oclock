@@ -16,7 +16,7 @@ GENERIC_MIME_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 
 MimeTypeValidation: TypeAlias = tuple[
     str | None,  # normalized_mime_type
-    str | None  # unsupported_reason
+    str | None,  # unsupported_reason
 ]
 
 

@@ -5,7 +5,7 @@ from urllib.parse import quote, urljoin
 from supabase import Client
 
 from app.core.config import settings
-from app.integrations.supabase_client import get_supabase_client
+from app.integrations.supabase_storage_client import get_supabase_storage_client
 
 
 class AttachmentStorage:
@@ -18,7 +18,7 @@ class AttachmentStorage:
     def _get_client(self) -> Client:
         if self._client is not None:
             return self._client
-        self._client = get_supabase_client()
+        self._client = get_supabase_storage_client()
         return self._client
 
     def _bucket(self) -> Any:
@@ -28,7 +28,7 @@ class AttachmentStorage:
     # No lleva return porque simplemente propaga la excepción a mail_ingestion_service.py si falla
     async def upload(self, path: str, content: bytes, mime_type: str) -> None:
         bucket = self._bucket()
-        await asyncio.to_thread(  # Separa operaciones asíncronas bloqueantes durante la ejecución en hilos separados para aceptar concurrencia (subir una imagen >3s) 
+        await asyncio.to_thread(  # Separa operaciones asíncronas bloqueantes durante la ejecución en hilos separados para aceptar concurrencia (subir una imagen >3s)
             bucket.upload,  # bucket.upload: instrucción para Supabase
             path=path,
             file=content,
@@ -58,7 +58,7 @@ class AttachmentStorage:
             bucket.create_signed_url,  # bucket.create_signed_url: instrucción para Supabase
             path,
             self.expires_in,
-            options=options or None,  
+            options=options or None,
         )
         # Se prueba con varias claves porque la API de Supabase Storage puede cambiarlas por su cuenta
         signed_url = response.get("signedURL") or response.get("signedUrl") or response.get("signed_url")
