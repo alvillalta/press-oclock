@@ -63,7 +63,7 @@ class AttachmentProcessingService:
             return
 
         try:
-            extraction = extract_file_text(mime_type, content)
+            extraction = await asyncio.to_thread(extract_file_text, mime_type, content)  # La conversión de MarkItDown es síncrona y puede tardar, por lo que si se separa como hilo puede atender otras tareas concurrentes
         except ExtractionDecodingError:
             logger.exception("Attachment text extraction failed for %s", attachment_id)
             self._mark_failed(attachment_id)
@@ -139,9 +139,7 @@ class AttachmentProcessingService:
             embedded_chunks = await self.indexing.embed_text(extraction)
 
         try:
-            self.session.exec(
-                delete(Chunk).where(col(Chunk.source_id) == source_id)
-            )
+            self.session.exec(delete(Chunk).where(col(Chunk.source_id) == source_id))
             if embedded_chunks:
                 crud.create_chunks(
                     session=self.session,

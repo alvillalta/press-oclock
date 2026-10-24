@@ -34,6 +34,7 @@ from app.models import (
 from app.rag.embedding import EmbeddingResponseError
 from app.services.mail_ingestion_service import MailIngestionService
 from app.services.storage_cleanup_service import StorageCleanupService
+from tests.utils.documents import build_pdf
 from tests.utils.mail import create_random_mail
 from tests.utils.user import create_random_user
 
@@ -389,7 +390,7 @@ def test_ingest_mail_without_body_does_not_create_chunks(
     assert db.exec(select(Chunk).where(Chunk.source_id == source.id)).all() == []
 
 
-def test_pdf_without_extractor_is_marked_failed(
+def test_pdf_is_extracted_and_indexed(
     client: TestClient,
     superuser_token_headers: dict[str, str],
     db: Session,
@@ -406,20 +407,6 @@ def test_pdf_without_extractor_is_marked_failed(
         "app.extraction.indexing.EmbeddingService", FakeEmbeddingService
     )
 
-    def index_attachment_text_must_not_run(
-        _self: AttachmentProcessingService,
-        *,
-        attachment_id: uuid.UUID,  # noqa: ARG001
-        extraction: str,  # noqa: ARG001
-    ) -> None:
-        raise AssertionError("Attachment extraction is out of scope for this version")
-
-    monkeypatch.setattr(
-        AttachmentProcessingService,
-        "index_attachment_text",
-        index_attachment_text_must_not_run,
-    )
-
     mail_payload = {
         "external_id": "msg-attach-1",
         "sender": "sender@example.com",
@@ -432,7 +419,7 @@ def test_pdf_without_extractor_is_marked_failed(
         f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
         data=_ingest_form(mail_payload, ["gmail-attachment-1"]),
-        files=[("files", ("brief.pdf", b"%PDF sample", "application/pdf"))],
+        files=[("files", ("brief.pdf", build_pdf(), "application/pdf"))],
     )
 
     assert response.status_code == 200
@@ -455,16 +442,19 @@ def test_pdf_without_extractor_is_marked_failed(
     attachment = db.exec(select(Attachment).where(Attachment.mail_id == mail_id)).one()
     assert attachment.filename == "brief.pdf"
     assert attachment.storage_path.startswith("mails/")
-    assert attachment.extraction is None
-    assert attachment.extraction_status == "failed"
+    assert attachment.extraction is not None
+    assert "Hello PDF" in attachment.extraction
+    assert attachment.extraction_status == "completed"
     assert len(storage.download_calls) == 1
     attachment_source = db.get(Source, attachment.source_id)
     assert attachment_source is not None
     assert attachment_source.origin == "attachment"
     assert attachment_source.user_id == webhook_user.id
-    assert db.exec(
+    attachment_chunks = db.exec(
         select(Chunk).where(Chunk.source_id == attachment.source_id)
-    ).all() == []
+    ).all()
+    assert len(attachment_chunks) == 1
+    assert attachment_chunks[0].content == attachment.extraction
     assert db.exec(
         select(AttachmentStage).where(
             AttachmentStage.mail_stage_id == ingestion_id
@@ -487,7 +477,7 @@ def test_pdf_without_extractor_is_marked_failed(
         headers=superuser_token_headers,
     )
     attachment_metadata = mail_detail.json()["attachments"][0]
-    assert attachment_metadata["extraction_status"] == "failed"
+    assert attachment_metadata["extraction_status"] == "completed"
 
 
 def test_ingest_extracts_and_indexes_txt_and_markdown(
