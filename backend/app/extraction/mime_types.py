@@ -10,6 +10,10 @@ SUPPORTED_ATTACHMENT_TYPES: dict[str, tuple[str, ...]] = {
     ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document",),
     ".pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation",),
     ".xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",),
+    ".jpg": ("image/jpeg",),
+    ".jpeg": ("image/jpeg",),
+    ".png": ("image/png",),
+    ".webp": ("image/webp",),
 }
 # Valores por defecto que pueden llegar o si llega vacío
 GENERIC_MIME_TYPES = {"", "application/octet-stream", "binary/octet-stream"}

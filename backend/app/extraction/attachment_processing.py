@@ -5,10 +5,7 @@ from sqlmodel import Session, col, delete, select
 
 from app import crud
 from app.core.logging import get_logger
-from app.extraction.extraction import (
-    ExtractionDecodingError,
-    extract_file_text,
-)
+from app.extraction.extraction import ExtractionError, extract_file_text
 from app.extraction.indexing import TextIndexingService
 from app.integrations.attachment_storage import AttachmentStorage
 from app.models import Attachment, Chunk
@@ -63,9 +60,12 @@ class AttachmentProcessingService:
             return
 
         try:
-            extraction = await asyncio.to_thread(extract_file_text, mime_type, content)  # La conversión de MarkItDown es síncrona y puede tardar, por lo que si se separa como hilo puede atender otras tareas concurrentes
-        except ExtractionDecodingError:
-            logger.exception("Attachment text extraction failed for %s", attachment_id)
+            extraction = await extract_file_text(mime_type, content)
+        # Recoge distintivamente entre errores de extracción y errores inesperados
+        except ExtractionError as exc:
+            logger.warning(
+                "Attachment text extraction failed for %s: %s", attachment_id, exc
+            )
             self._mark_failed(attachment_id)
             return
         except Exception:

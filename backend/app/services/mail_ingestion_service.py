@@ -106,6 +106,7 @@ class MailIngestionService:
                     session=self.session, storage=self.storage
                 ).process_mail_attachments(mail_id=finalized_mail_result.mail_id)
             except Exception:
+                # Registra el error pero no vuelve a lanzarlo con raise porque no es bloqueante del éxito del endpoint
                 logger.exception("Attachment processing failed after mail finalization")
 
         # Devuelve MailStagePublic

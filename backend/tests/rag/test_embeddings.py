@@ -48,9 +48,7 @@ async def test_question_embedding_response_dimension_is_validated(
     )
 
     with pytest.raises(EmbeddingResponseError, match=f"{settings.EMBEDDING_DIMENSIONS} dimensions"):
-        await EmbeddingService(max_retries=1, wait_seconds=0).generate_question_embedding(
-            "Question"
-        )
+        await EmbeddingService().generate_question_embedding("Question")
 
 
 @pytest.mark.anyio
@@ -66,8 +64,6 @@ async def test_chunk_embedding_response_dimension_is_validated(
     with pytest.raises(EmbeddingResponseError, match=f"{settings.EMBEDDING_DIMENSIONS} dimensions"):
         await EmbeddingService(
             batch_size=1,
-            max_retries=1,
-            wait_seconds=0,
             overlaped_characters=100,
         ).generate_chunk_embeddings(
             chunks=[ChunkBase(content="Chunk", position=1)],
@@ -88,8 +84,6 @@ async def test_chunk_embedding_response_count_mismatch_is_rejected(
     with pytest.raises(EmbeddingResponseError, match="Mismatch"):
         await EmbeddingService(
             batch_size=2,
-            max_retries=1,
-            wait_seconds=0,
             overlaped_characters=100,
         ).generate_chunk_embeddings(
             chunks=[
@@ -97,3 +91,29 @@ async def test_chunk_embedding_response_count_mismatch_is_rejected(
                 ChunkBase(content="Chunk two", position=2),
             ],
         )
+
+
+@pytest.mark.anyio
+async def test_question_embedding_wraps_provider_failure_without_retrying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    async def create(**_kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(
+        embedding,
+        "client",
+        SimpleNamespace(embeddings=SimpleNamespace(create=create)),
+    )
+
+    with pytest.raises(
+        RuntimeError, match="Question embedding failed"
+    ) as exc_info:
+        await EmbeddingService().generate_question_embedding("Question")
+
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert calls == 1

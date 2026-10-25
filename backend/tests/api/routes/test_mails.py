@@ -254,24 +254,28 @@ class FakeAttachmentStorage:
         return f"https://storage.example/{path}?expires={self.expires_in}&download={download_filename}"
 
 
-def test_text_mime_types_share_the_same_extractor() -> None:
+@pytest.mark.anyio
+async def test_text_mime_types_share_the_same_extractor() -> None:
     markdown = b"# Heading\n\nBody"
     for mime_type in ("text/plain", "text/markdown", "text/x-markdown"):
-        assert extract_file_text(mime_type, markdown) == "# Heading\n\nBody"
+        assert await extract_file_text(mime_type, markdown) == "# Heading\n\nBody"
 
 
-def test_extract_file_text_strips_utf8_bom() -> None:
-    assert extract_file_text("text/plain", b"\xef\xbb\xbfcontent") == "content"
+@pytest.mark.anyio
+async def test_extract_file_text_strips_utf8_bom() -> None:
+    assert await extract_file_text("text/plain", b"\xef\xbb\xbfcontent") == "content"
 
 
-def test_extract_file_text_rejects_invalid_utf8() -> None:
+@pytest.mark.anyio
+async def test_extract_file_text_rejects_invalid_utf8() -> None:
     with pytest.raises(ExtractionDecodingError):
-        extract_file_text("text/plain", b"\xff")
+        await extract_file_text("text/plain", b"\xff")
 
 
-def test_extract_file_text_rejects_unimplemented_mime_type() -> None:
+@pytest.mark.anyio
+async def test_extract_file_text_rejects_unimplemented_mime_type() -> None:
     with pytest.raises(ValueError, match="No text extraction flow implemented"):
-        extract_file_text("image/jpeg", b"x")
+        await extract_file_text("application/zip", b"x")
 
 
 def test_attachment_upload_accepts_route_fields() -> None:
@@ -1011,8 +1015,8 @@ def test_unsupported_attachment_is_omitted_without_upload(
     response = client.post(
         f"{settings.API_STR}/mails/ingest-mail",
         headers={"X-API-Key": settings.MAKE_API_KEY},
-        data=_ingest_form(mail_payload, ["gmail-image-1"]),
-        files=[("files", ("photo.png", b"image", "image/png"))],
+        data=_ingest_form(mail_payload, ["gmail-archive-1"]),
+        files=[("files", ("archive.zip", b"archive", "application/zip"))],
     )
 
     assert response.status_code == 200
@@ -1021,7 +1025,7 @@ def test_unsupported_attachment_is_omitted_without_upload(
     assert payload["result_summary"]["stored_count"] == 0
     assert payload["result_summary"]["omitted_count"] == 1
     assert payload["result_summary"]["omitted"] == [
-        {"external_id": "gmail-image-1", "reason": "Unsupported file type"}
+        {"external_id": "gmail-archive-1", "reason": "Unsupported file type"}
     ]
     assert storage.upload_calls == []
     mail_id = uuid.UUID(payload["mail_id"])

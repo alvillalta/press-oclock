@@ -24,7 +24,12 @@ from app.extraction.mime_types import get_attachment_mime_type
                 None,
             ),
         ),
-        ("photo.png", "image/png", (None, "Unsupported file type")),
+        ("photo.png", "image/png", ("image/png", None)),
+        ("photo.jpg", "image/jpeg", ("image/jpeg", None)),
+        ("photo.jpeg", "", ("image/jpeg", None)),
+        ("photo.webp", "image/webp", ("image/webp", None)),
+        ("photo.png", "application/octet-stream", ("image/png", None)),
+        ("archive.zip", "application/zip", (None, "Unsupported file type")),
     ],
 )
 def test_get_attachment_mime_type_classifies_supported_and_unsupported_types(

@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
@@ -94,20 +93,6 @@ def test_build_prompt_context_separates_multiple_sources() -> None:
     assert "\n---\n" in context
 
 
-def test_generation_service_default_retry_configuration() -> None:
-    service = GenerationService()
-
-    assert service.max_retries == 3
-    assert service.wait_seconds == 2
-
-
-def test_generation_service_custom_retry_configuration() -> None:
-    service = GenerationService(max_retries=5, wait_seconds=1)
-
-    assert service.max_retries == 5
-    assert service.wait_seconds == 1
-
-
 @pytest.mark.anyio
 async def test_generation_succeeds_on_first_attempt(
     monkeypatch: pytest.MonkeyPatch,
@@ -117,52 +102,15 @@ async def test_generation_succeeds_on_first_attempt(
 
     client, calls = fake_openai_client(create)
     monkeypatch.setattr(generation, "client", client)
-    slept: list[int] = []
-
-    async def fake_sleep(seconds: int) -> None:
-        slept.append(seconds)
-
-    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
     answer = await GenerationService().generate_answer("Pregunta", [])
 
     assert answer == "Respuesta"
     assert calls["create"] == 1
-    assert slept == []
 
 
 @pytest.mark.anyio
-async def test_generation_retries_after_error_then_succeeds(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    attempts = {"count": 0}
-
-    async def create(**_kwargs: Any) -> Any:
-        attempts["count"] += 1
-        if attempts["count"] == 1:
-            raise RuntimeError("boom")
-        return completion_response("Respuesta")
-
-    client, calls = fake_openai_client(create)
-    monkeypatch.setattr(generation, "client", client)
-    slept: list[int] = []
-
-    async def fake_sleep(seconds: int) -> None:
-        slept.append(seconds)
-
-    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
-
-    answer = await GenerationService(max_retries=3, wait_seconds=2).generate_answer(
-        "Pregunta", []
-    )
-
-    assert answer == "Respuesta"
-    assert calls["create"] == 2
-    assert slept == [2]
-
-
-@pytest.mark.anyio
-async def test_generation_raises_after_exhausting_attempts(
+async def test_generation_wraps_provider_failure_without_retrying(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def create(**_kwargs: Any) -> Any:
@@ -170,20 +118,14 @@ async def test_generation_raises_after_exhausting_attempts(
 
     client, calls = fake_openai_client(create)
     monkeypatch.setattr(generation, "client", client)
-    slept: list[int] = []
 
-    async def fake_sleep(seconds: int) -> None:
-        slept.append(seconds)
+    with pytest.raises(
+        RuntimeError, match="Answer generation failed"
+    ) as exc_info:
+        await GenerationService().generate_answer("Pregunta", [])
 
-    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
-
-    with pytest.raises(RuntimeError):
-        await GenerationService(max_retries=3, wait_seconds=2).generate_answer(
-            "Pregunta", []
-        )
-
-    assert calls["create"] == 3
-    assert slept == [2, 4]
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert calls["create"] == 1
 
 
 @pytest.mark.anyio
@@ -195,15 +137,8 @@ async def test_generation_empty_answer_is_not_retried(
 
     client, calls = fake_openai_client(create)
     monkeypatch.setattr(generation, "client", client)
-    slept: list[int] = []
-
-    async def fake_sleep(seconds: int) -> None:
-        slept.append(seconds)
-
-    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
     answer = await GenerationService().generate_answer("Pregunta", [])
 
     assert answer == ""
     assert calls["create"] == 1
-    assert slept == []

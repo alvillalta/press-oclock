@@ -1,8 +1,7 @@
-import asyncio
 from datetime import datetime
 
 from openai.types.chat import (
-    ChatCompletionMessageParam,  # Formato de salida de la API de OpenAI
+    ChatCompletionMessageParam,  # Formato esperado de salida de la API de OpenAI
 )
 
 from app.core.config import settings
@@ -54,10 +53,6 @@ def _build_messages(question: str, prompt_context: str) -> list[ChatCompletionMe
 
 class GenerationService:
     """Servicio para construir el contexto del prompt y generar la respuesta."""
-
-    def __init__(self, max_retries: int = 3, wait_seconds: int = 2):
-        self.max_retries = max_retries
-        self.wait_seconds = wait_seconds
 
     def build_prompt_context(self, augmented_chunk_groups: list[AugmentedChunksGroup]) -> str:
         """
@@ -115,19 +110,13 @@ class GenerationService:
         prompt_context = self.build_prompt_context(augmented_chunk_groups)
         messages = _build_messages(question_in, prompt_context)
 
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                response = await client.chat.completions.create(
-                    model=settings.GENERATION_MODEL,
-                    messages=messages,
-                )
-                break
-            except Exception as exc:
-                logger.warning(
-                    "Generation failed (attempt %s/%s): %s", attempt, self.max_retries, exc
-                )
-                if attempt == self.max_retries:
-                    raise RuntimeError("Answer generation failed") from exc
-                await asyncio.sleep(self.wait_seconds * attempt)
+        try:
+            response = await client.chat.completions.create(
+                model=settings.GENERATION_MODEL,
+                messages=messages,
+            )
+        except Exception as exc:
+            logger.warning("Generation failed: %s", exc)
+            raise RuntimeError("Answer generation failed") from exc
 
         return response.choices[0].message.content or ""
