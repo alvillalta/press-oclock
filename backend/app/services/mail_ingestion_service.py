@@ -10,7 +10,7 @@ from app import crud
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.extraction.attachment_processing import AttachmentProcessingService
-from app.extraction.indexing import TextIndexingService
+from app.extraction.mail_processing import MailProcessingService
 from app.extraction.mime_types import get_attachment_mime_type
 from app.integrations.attachment_storage import AttachmentStorage
 from app.models import (
@@ -102,12 +102,25 @@ class MailIngestionService:
         # Evalúa finalized_in_this call para procesar únicamente la rama ligada que ha persistido los datos, evitando problemas de concurrencia y de repetición de mails que ya hubiesen sido completados
         if finalized_mail_result.finalized_in_this_call:
             try:
+                await MailProcessingService(session=self.session).process_mail_body(
+                    mail_id=finalized_mail_result.mail_id
+                )
+            # Levanta el error si el mail no existe tras finalizar la ingesta
+            except LookupError as exc:
+                raise MailIngestionError(
+                    "Mail not found after finalizing ingestion"
+                ) from exc
+            except Exception:
+                # Registra el error pero no vuelve a lanzarlo con raise porque no es bloqueante del éxito del endpoint, lo mismo con attachments
+                logger.exception("Mail body indexing failed after mail finalization")
+
+            try:
                 await AttachmentProcessingService(
-                    session=self.session, storage=self.storage
+                    session=self.session,
+                    storage=self.storage,
                 ).process_mail_attachments(mail_id=finalized_mail_result.mail_id)
             except Exception:
-                # Registra el error pero no vuelve a lanzarlo con raise porque no es bloqueante del éxito del endpoint
-                logger.exception("Attachment processing failed after mail finalization")
+                logger.exception("Attachment extraction indexing failed after mail finalization")
 
         # Devuelve MailStagePublic
         finalized_stage = self.session.get(MailStage, ingestion_id)
@@ -333,59 +346,16 @@ class MailIngestionService:
         self, ingestion_id: UUID, user_id: UUID
     ) -> FinalizedMailResult:
         logger.info("Setting up mail and attachments from staging")
-        # Primera parte de consultas a db para fallar rápido antes del coste/latencia de generar los embeddings
-        stage = self.session.exec(
-            select(MailStage).where(
-                MailStage.id == ingestion_id, MailStage.user_id == user_id
-            )
-        ).first()
-        if stage is None:
-            raise LookupError("Mail ingestion not found")
-        if stage.status == "completed" and stage.mail_id is not None:
-            completed_mail = self.session.get(Mail, stage.mail_id)
-            if completed_mail is not None:
-                # Correo ya persistido por lo que no se repite su procesamiento de texto
-                return FinalizedMailResult(
-                    mail_id=completed_mail.id, finalized_in_this_call=False
-                )
-        if stage.status != "receiving":
-            raise ValueError("Mail ingestion cannot be finalized")
-
-        # Guarda external_id y mail_in en variables locales antes de expirar el objeto con rollback()
-        external_id = stage.external_id
-        mail_in = MailCreate(
-            subject=stage.subject,
-            sender=stage.sender,
-            received_at=stage.received_at,
-            body=stage.body,
-            external_id=external_id,
-        )
-        staged_attachments = list(
-            self.session.exec(
-                select(AttachmentStage).where(
-                    col(AttachmentStage.mail_stage_id) == ingestion_id
-                )
-            ).all()
-        )
-        if any(attachment.status == "pending" for attachment in staged_attachments):
-            raise ValueError("Mail ingestion has attachments still being uploaded")
-        # .rollback() cierra la transacción de lectura de datos para comprobar el stage
-        self.session.rollback()
-
-        # Servicio de Embedding de los chunks del body
-        embedded_chunks = []
-        if isinstance(mail_in.body, str) and mail_in.body.strip():
-            embedded_chunks = await TextIndexingService().embed_text(mail_in.body)
 
         try:
-            # Segunda parte de consultas a db para bloquear el stage y evitar efectos de concurrencia si se ha alterado durante el tiempo que se generaban los embeddings
+            # with_for_update() bloquea la escritura del stage durante la validación y la persistencia para evitar finalizaciones concurrentes
             stage = self.session.exec(
                 select(MailStage)
                 .where(
                     MailStage.id == ingestion_id,
                     MailStage.user_id == user_id,
                 )
-                .with_for_update()  # Bloquea MailStage
+                .with_for_update()
             ).first()
             if stage is None:
                 raise LookupError("Mail ingestion not found")
@@ -400,6 +370,14 @@ class MailIngestionService:
             if stage.status != "receiving":
                 raise ValueError("Mail ingestion cannot be finalized")
 
+            external_id = stage.external_id
+            mail_in = MailCreate(
+                subject=stage.subject,
+                sender=stage.sender,
+                received_at=stage.received_at,
+                body=stage.body,
+                external_id=external_id,
+            )
             staged_attachments = list(
                 self.session.exec(
                     select(AttachmentStage).where(
@@ -416,7 +394,7 @@ class MailIngestionService:
             if pending_attachments:
                 raise ValueError("Mail ingestion has attachments still being uploaded")
 
-            # Lista solo con la condición de "stored", los "ommited" se quedan fuera
+            # Lista solo con la condición de "stored", los "omitted" se quedan fuera
             stored_attachments = [
                 attachment
                 for attachment in staged_attachments
@@ -443,13 +421,6 @@ class MailIngestionService:
                 db_attachment.source = attachment_source
                 db_attachment.mail = db_mail
                 self.session.add(db_attachment)
-
-            if embedded_chunks:
-                crud.create_chunks(
-                    session=self.session,
-                    chunks_in=embedded_chunks,
-                    source_id=db_mail.source_id,
-                )
 
             omitted_attachments = [
                 {

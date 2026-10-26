@@ -1,14 +1,13 @@
 import asyncio
 from uuid import UUID
 
-from sqlmodel import Session, col, delete, select
+from sqlmodel import Session, col, select
 
-from app import crud
 from app.core.logging import get_logger
+from app.extraction.chunk_indexing import ChunkIndexingService
 from app.extraction.extraction import ExtractionError, extract_file_text
-from app.extraction.indexing import TextIndexingService
 from app.integrations.attachment_storage import AttachmentStorage
-from app.models import Attachment, Chunk
+from app.models import Attachment
 
 logger = get_logger(__name__)
 
@@ -17,11 +16,11 @@ class AttachmentProcessingService:
     def __init__(
         self,
         session: Session,
-        indexing: TextIndexingService | None = None,
+        indexing: ChunkIndexingService | None = None,
         storage: AttachmentStorage | None = None,
     ) -> None:
         self.session = session
-        self.indexing = indexing or TextIndexingService()
+        self.indexing = indexing or ChunkIndexingService(session=session)
         self.storage = storage or AttachmentStorage()
         self.attachment_download_retries: int = 3
 
@@ -32,6 +31,9 @@ class AttachmentProcessingService:
                 select(Attachment.id).where(col(Attachment.mail_id) == mail_id)
             ).all()
         )
+        if not attachment_ids:
+            return
+
         for attachment_id in attachment_ids:
             try:
                 await self.process_attachment(attachment_id=attachment_id)
@@ -123,7 +125,7 @@ class AttachmentProcessingService:
             raise LookupError("Attachment not found")
 
         source_id = attachment.source_id
-        has_text = bool(extraction.strip())
+        has_text = bool(extraction.strip())  # Necesitamos este valor intermedio para indexar correctamente
         attachment.extraction = extraction if has_text else ""
         attachment.extraction_status = "completed" if has_text else "empty"
         self.session.add(attachment)
@@ -133,20 +135,7 @@ class AttachmentProcessingService:
             self.session.rollback()
             raise
 
-        embedded_chunks = []
-        if extraction.strip():
-            logger.info("Embedding attachment extraction")
-            embedded_chunks = await self.indexing.embed_text(extraction)
-
-        try:
-            self.session.exec(delete(Chunk).where(col(Chunk.source_id) == source_id))
-            if embedded_chunks:
-                crud.create_chunks(
-                    session=self.session,
-                    chunks_in=embedded_chunks,
-                    source_id=source_id,
-                )
-            self.session.commit()
-        except Exception:
-            self.session.rollback()
-            raise
+        await self.indexing.index_source_text(
+            source_id=source_id,
+            text=extraction,
+        )
