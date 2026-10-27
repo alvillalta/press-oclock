@@ -5,11 +5,10 @@ from functools import lru_cache
 from io import BytesIO
 from typing import TypeAlias
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from markitdown import MarkItDown, StreamInfo
-from openai.types.chat import ChatCompletionMessageParam
 
-from app.core.config import settings
-from app.integrations.openai_client import get_openai_client
+from app.integrations.openai_client import get_chat_model
 
 # Función que recibe mime_type y bytes y devuelve texto de forma asíncrona
 Extractor: TypeAlias = Callable[[str, bytes], Awaitable[str]]
@@ -84,31 +83,20 @@ system_prompt = f"""
     """
 
 async def _extract_with_vision(mime_type: str, content: bytes) -> str:
-    encoded_image = base64.b64encode(content).decode("ascii")  # Convierte los bytes de la imagen a Base64 (una representación textual de los mismos)
-    messages: list[ChatCompletionMessageParam] = [
-        {"role": "system", "content": system_prompt},
-        {
-            "role": "user",
-            "content": [
-                {
-                    # Forma una data URL con el tipo de imagen y la imagen codificada en Base64 para que el modelo del LLM pueda interpretarla correctamente
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{mime_type};base64,{encoded_image}",
-                    },
-                }
-            ],
-        },
+    encoded_image = base64.b64encode(content).decode("ascii")  # Convierte los bytes de la imagen a Base64 (una representación textual de los mismos). Usa ascii, un subconjunto de utf-8, porque está más acotado al tipo de caracteres que devuelve base64
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(
+            content=[{"type": "image", "base64": encoded_image, "mime_type": mime_type}],  # Content block estándar de LangChain (en este caso han de declararse más campos que en un texto para enviar el contenido de una imágen) portable entre distintos proveedores de LLM
+        ),
     ]
+
     try:
-        response = await get_openai_client().chat.completions.create(
-            model=settings.GENERATION_MODEL,
-            messages=messages,
-        )
+        response = await get_chat_model().ainvoke(messages)
     except Exception as exc:
         raise ImageExtractionError("Image description extraction failed") from exc
 
-    description = response.choices[0].message.content or ""
+    description = response.text or ""
     return description.strip()[:IMAGE_DESCRIPTION_MAX_CHARS]  # Refuerzo de recorte para que nunca se pase de los caracteres máximos que buscamos
 
 

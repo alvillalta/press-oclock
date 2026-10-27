@@ -1,20 +1,15 @@
 from datetime import datetime
 
-from openai.types.chat import (
-    ChatCompletionMessageParam,  # Formato esperado de salida de la API de OpenAI
-)
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from app.core.config import settings
 from app.core.logging import get_logger
-from app.integrations.openai_client import get_openai_client
+from app.integrations.openai_client import get_chat_model
 from app.models import AugmentedChunksGroup, QuestionBase
 
 logger = get_logger(__name__)
 
-client = get_openai_client()
 
-
-def _build_messages(question: str, prompt_context: str) -> list[ChatCompletionMessageParam]:
+def _build_messages(question: str, prompt_context: str) -> list[BaseMessage]:
     """
     Construye el prompt final para el modelo de IA generativa.
     """
@@ -44,10 +39,9 @@ def _build_messages(question: str, prompt_context: str) -> list[ChatCompletionMe
         {question}
     """
 
-    # Formato de entrada para la API de OpenAI
     return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
     ]
 
 
@@ -111,12 +105,9 @@ class GenerationService:
         messages = _build_messages(question_in, prompt_context)
 
         try:
-            response = await client.chat.completions.create(
-                model=settings.GENERATION_MODEL,
-                messages=messages,
-            )
+            response = await get_chat_model().ainvoke(messages)
         except Exception as exc:
             logger.warning("Generation failed: %s", exc)
             raise RuntimeError("Answer generation failed") from exc
 
-        return response.choices[0].message.content or ""
+        return response.text or ""

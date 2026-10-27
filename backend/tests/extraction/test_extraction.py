@@ -3,8 +3,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from langchain_core.messages import AIMessage
 
-from app.core.config import settings
 from app.extraction import extraction
 from app.extraction.extraction import (
     ImageExtractionError,
@@ -39,31 +39,22 @@ async def test_extract_file_text_converts_supported_documents(
     assert expected in await extract_file_text(mime_type, content)
 
 
-def _fake_vision_client(descriptions: list[str]) -> tuple[Any, list[dict[str, Any]]]:
-    calls: list[dict[str, Any]] = []
+def _fake_vision_model(descriptions: list[str]) -> tuple[Any, list[Any]]:
+    calls: list[Any] = []
 
-    async def create(**kwargs: Any) -> Any:
-        calls.append(kwargs)
-        return SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(content=descriptions.pop(0))
-                )
-            ]
-        )
+    async def ainvoke(messages: Any, **_kwargs: Any) -> Any:
+        calls.append(messages)
+        return AIMessage(content=descriptions.pop(0))
 
-    client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
-    )
-    return client, calls
+    return SimpleNamespace(ainvoke=ainvoke), calls
 
 
 @pytest.mark.anyio
 async def test_extract_file_text_describes_image_with_vision_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, calls = _fake_vision_client(["  Una fotografía de una calle.  "])
-    monkeypatch.setattr(extraction, "get_openai_client", lambda: client)
+    model, calls = _fake_vision_model(["  Una fotografía de una calle.  "])
+    monkeypatch.setattr(extraction, "get_chat_model", lambda: model)
     content = b"\x89PNG\r\n\x1a\nfoto"
 
     assert (
@@ -72,19 +63,18 @@ async def test_extract_file_text_describes_image_with_vision_model(
     )
 
     request = calls[0]
-    assert request["model"] == settings.GENERATION_MODEL
-    expected_url = (
-        "data:image/png;base64," + base64.b64encode(content).decode("ascii")
-    )
-    assert request["messages"][1]["content"][0]["image_url"]["url"] == expected_url
+    block = request[1].content[0]
+    assert block["type"] == "image"
+    assert block["mime_type"] == "image/png"
+    assert block["base64"] == base64.b64encode(content).decode("ascii")
 
 
 @pytest.mark.anyio
 async def test_extract_file_text_truncates_image_description_to_chunk_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, _ = _fake_vision_client(["x" * 900])
-    monkeypatch.setattr(extraction, "get_openai_client", lambda: client)
+    model, _ = _fake_vision_model(["x" * 900])
+    monkeypatch.setattr(extraction, "get_chat_model", lambda: model)
 
     description = await extract_file_text("image/jpeg", b"foto")
 
@@ -98,15 +88,13 @@ async def test_vision_extraction_wraps_provider_failure_without_retrying(
 ) -> None:
     calls = 0
 
-    async def create(**_kwargs: Any) -> Any:
+    async def ainvoke(_messages: Any, **_kwargs: Any) -> Any:
         nonlocal calls
         calls += 1
         raise RuntimeError("provider unavailable")
 
-    client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
-    )
-    monkeypatch.setattr(extraction, "get_openai_client", lambda: client)
+    model = SimpleNamespace(ainvoke=ainvoke)
+    monkeypatch.setattr(extraction, "get_chat_model", lambda: model)
 
     with pytest.raises(
         ImageExtractionError, match="Image description extraction failed"

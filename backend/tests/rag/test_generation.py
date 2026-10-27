@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from app.core.config import settings
 from app.models import AugmentedChunksGroup, Chunk
@@ -11,22 +12,14 @@ from app.rag import generation
 from app.rag.generation import GenerationService
 
 
-def completion_response(content: str | None) -> Any:
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-    )
+def fake_chat_model(ainvoke: Any) -> tuple[Any, dict[str, int]]:
+    calls = {"ainvoke": 0}
 
+    async def invoke_wrapper(messages: Any, **kwargs: Any) -> Any:
+        calls["ainvoke"] += 1
+        return await ainvoke(messages, **kwargs)
 
-def fake_openai_client(create: Any) -> tuple[Any, dict[str, int]]:
-    calls = {"create": 0}
-
-    async def create_wrapper(**kwargs: Any) -> Any:
-        calls["create"] += 1
-        return await create(**kwargs)
-
-    completions = SimpleNamespace(create=create_wrapper)
-    chat = SimpleNamespace(completions=completions)
-    return SimpleNamespace(chat=chat), calls
+    return SimpleNamespace(ainvoke=invoke_wrapper), calls
 
 
 def make_chunk(source_id: UUID, position: int, content: str) -> Chunk:
@@ -97,27 +90,27 @@ def test_build_prompt_context_separates_multiple_sources() -> None:
 async def test_generation_succeeds_on_first_attempt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def create(**_kwargs: Any) -> Any:
-        return completion_response("Respuesta")
+    async def ainvoke(_messages: Any, **_kwargs: Any) -> Any:
+        return AIMessage(content="Respuesta")
 
-    client, calls = fake_openai_client(create)
-    monkeypatch.setattr(generation, "client", client)
+    model, calls = fake_chat_model(ainvoke)
+    monkeypatch.setattr(generation, "get_chat_model", lambda: model)
 
     answer = await GenerationService().generate_answer("Pregunta", [])
 
     assert answer == "Respuesta"
-    assert calls["create"] == 1
+    assert calls["ainvoke"] == 1
 
 
 @pytest.mark.anyio
 async def test_generation_wraps_provider_failure_without_retrying(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def create(**_kwargs: Any) -> Any:
+    async def ainvoke(_messages: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("boom")
 
-    client, calls = fake_openai_client(create)
-    monkeypatch.setattr(generation, "client", client)
+    model, calls = fake_chat_model(ainvoke)
+    monkeypatch.setattr(generation, "get_chat_model", lambda: model)
 
     with pytest.raises(
         RuntimeError, match="Answer generation failed"
@@ -125,20 +118,20 @@ async def test_generation_wraps_provider_failure_without_retrying(
         await GenerationService().generate_answer("Pregunta", [])
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
-    assert calls["create"] == 1
+    assert calls["ainvoke"] == 1
 
 
 @pytest.mark.anyio
 async def test_generation_empty_answer_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def create(**_kwargs: Any) -> Any:
-        return completion_response(None)
+    async def ainvoke(_messages: Any, **_kwargs: Any) -> Any:
+        return AIMessage(content="")
 
-    client, calls = fake_openai_client(create)
-    monkeypatch.setattr(generation, "client", client)
+    model, calls = fake_chat_model(ainvoke)
+    monkeypatch.setattr(generation, "get_chat_model", lambda: model)
 
     answer = await GenerationService().generate_answer("Pregunta", [])
 
     assert answer == ""
-    assert calls["create"] == 1
+    assert calls["ainvoke"] == 1

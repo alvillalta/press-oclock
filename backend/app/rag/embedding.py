@@ -1,11 +1,9 @@
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.integrations.openai_client import get_openai_client
+from app.integrations.openai_client import get_embeddings_model
 from app.models import ChunkBase, ChunkCreate, QuestionBase, QuestionEmbedding
 
 logger = get_logger(__name__)
-
-client = get_openai_client()
 
 
 # Levanta el error si las dimensiones del embedding no coinciden con las esperadas de manera que no bloquee cada operación que necesite embeddings
@@ -46,20 +44,17 @@ class EmbeddingService:
             inputs = [chunk.content for chunk in batch]
 
             try:
-                response = await client.embeddings.create(
-                    model=settings.EMBEDDING_MODEL,
-                    input=inputs,
-                )
+                embeddings = await get_embeddings_model().aembed_documents(inputs)
             except Exception as exc:
                 logger.warning("Chunk embedding batch failed: %s", exc)
                 raise RuntimeError("Chunks embedding failed") from exc
 
-            if len(batch) != len(response.data):
-                #response.data es la lista de embeddings que devuelve OpenAI por cada chunk del batch
+            if len(batch) != len(embeddings):
+                # embeddings es la lista de vectores que devuelve el LLM por cada por cada chunk del lote
                 raise EmbeddingResponseError("Mismatch between number of chunks and embeddings returned")
 
-            for chunk, datum in zip(batch, response.data, strict=True):
-                embedding = _validate_embedding_dimensions(datum.embedding)
+            for chunk, chunk_embedding in zip(batch, embeddings, strict=True):
+                embedding = _validate_embedding_dimensions(chunk_embedding)
 
                 # Quita el ovelap del texto de los chunks antes de guardar en la db
                 if chunk.position == 1:
@@ -90,14 +85,11 @@ class EmbeddingService:
         logger.info("Embedding a question through an AI model")
 
         try:
-            response = await client.embeddings.create(
-                model=settings.EMBEDDING_MODEL,
-                input=question,
-            )
+            embedding = await get_embeddings_model().aembed_query(question)
         except Exception as exc:
             logger.warning("Question embedding failed: %s", exc)
             raise RuntimeError("Question embedding failed") from exc
 
-        embedded_question = _validate_embedding_dimensions(response.data[0].embedding)
+        embedded_question = _validate_embedding_dimensions(embedding)
 
         return embedded_question

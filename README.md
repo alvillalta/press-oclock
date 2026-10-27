@@ -97,6 +97,38 @@ This demo shows the main **Press O'clock** application behavior.
 
 ---
 
+## Runtime and AI Stack
+
+The backend uses the same Python line across local development, Docker and CI:
+
+- `.python-version` and `backend/pyproject.toml` require **Python 3.14** (`>=3.14,<3.15`).
+- `backend/Dockerfile` builds from `python:3.14`.
+- GitHub Actions workflows read `.python-version`, so CI uses the same interpreter.
+- `backend/uv.lock` is resolved for Python 3.14 only.
+
+The AI dependencies currently installed are:
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `openai` | 3.39.0 | OpenAI SDK used indirectly by the LangChain adapters |
+| `langchain-openai` | 1.7.3 | LangChain adapters for OpenAI chat and embeddings |
+| `langchain-core` | 1.7.0 | Core LangChain interfaces, included transitively |
+
+Chat, vision extraction and embeddings use `ChatOpenAI` and `OpenAIEmbeddings` through cached adapters in `backend/app/integrations/openai_client.py`. The RAG pipeline, SQL/pgvector retrieval, chunking and persistence remain unchanged, and MarkItDown still handles PDF, DOCX, PPTX and XLSX extraction.
+
+When changing Python or AI dependencies:
+
+```bash
+cd backend
+uv add "<package>"
+uv lock --check
+uv sync --locked --python 3.14
+```
+
+Avoid `uv lock --upgrade` unless a full dependency update is intended. Use a disposable PostgreSQL database for tests; do not point the suite at production data.
+
+---
+
 ## Project Structure
 
 ```
@@ -127,15 +159,15 @@ press-oclock/
 │   │   │   ├── config.py           # Settings & environment variables
 │   │   │   ├── db.py               # Database connection & session management
 │   │   │   ├── logging.py          # Structured logging configuration
-│   │   │   ├── security.py         # JWT authentication & password hashing
-│   │   │   └── openai_client.py    # OpenAI client integration
+│   │   │   └── security.py         # JWT authentication & password hashing
 │   │   │
 │   │   ├── services/
 │   │   │   ├── mail_service.py     # Mail ingestion & embedding pipeline
 │   │   │   └── rag_service.py      # RAG (Retrieval-Augmented Generation)
 │   │   │
 │   │   ├── integrations/
-│   │   │   └── email_provider.py   # Email provider abstraction
+│   │   │   ├── email_provider.py   # Email provider abstraction
+│   │   │   └── openai_client.py    # Cached LangChain OpenAI adapters
 │   │   │
 │   │   ├── rag/
 │   │   │   ├── chunking.py         # Text chunking for embeddings

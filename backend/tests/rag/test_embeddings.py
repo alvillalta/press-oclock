@@ -10,11 +10,22 @@ from app.rag import embedding
 from app.rag.embedding import EmbeddingResponseError, EmbeddingService
 
 
-def fake_openai_client(embedding: list[float]) -> Any:
-    async def create(**_kwargs: Any) -> Any:
-        return SimpleNamespace(data=[SimpleNamespace(embedding=embedding)])
+def fake_embeddings_model(
+    embedding: list[float],
+    document_embeddings: list[list[float]] | None = None,
+) -> Any:
+    async def aembed_documents(texts: list[str]) -> list[list[float]]:
+        if document_embeddings is not None:
+            return document_embeddings
+        return [embedding for _ in texts]
 
-    return SimpleNamespace(embeddings=SimpleNamespace(create=create))
+    async def aembed_query(_text: str) -> list[float]:
+        return embedding
+
+    return SimpleNamespace(
+        aembed_documents=aembed_documents,
+        aembed_query=aembed_query,
+    )
 
 
 def test_chunk_embedding_requires_configured_dimension() -> None:
@@ -43,8 +54,10 @@ async def test_question_embedding_response_dimension_is_validated(
 ) -> None:
     monkeypatch.setattr(
         embedding,
-        "client",
-        fake_openai_client([0.0] * (settings.EMBEDDING_DIMENSIONS - 1)),
+        "get_embeddings_model",
+        lambda: fake_embeddings_model(
+            [0.0] * (settings.EMBEDDING_DIMENSIONS - 1)
+        ),
     )
 
     with pytest.raises(EmbeddingResponseError, match=f"{settings.EMBEDDING_DIMENSIONS} dimensions"):
@@ -57,8 +70,10 @@ async def test_chunk_embedding_response_dimension_is_validated(
 ) -> None:
     monkeypatch.setattr(
         embedding,
-        "client",
-        fake_openai_client([0.0] * (settings.EMBEDDING_DIMENSIONS - 1)),
+        "get_embeddings_model",
+        lambda: fake_embeddings_model(
+            [0.0] * (settings.EMBEDDING_DIMENSIONS - 1)
+        ),
     )
 
     with pytest.raises(EmbeddingResponseError, match=f"{settings.EMBEDDING_DIMENSIONS} dimensions"):
@@ -77,8 +92,11 @@ async def test_chunk_embedding_response_count_mismatch_is_rejected(
     # El cliente devuelve un único embedding aunque se le envíen dos chunks
     monkeypatch.setattr(
         embedding,
-        "client",
-        fake_openai_client([0.0] * settings.EMBEDDING_DIMENSIONS),
+        "get_embeddings_model",
+        lambda: fake_embeddings_model(
+            [0.0] * settings.EMBEDDING_DIMENSIONS,
+            document_embeddings=[[0.0] * settings.EMBEDDING_DIMENSIONS],
+        ),
     )
 
     with pytest.raises(EmbeddingResponseError, match="Mismatch"):
@@ -99,15 +117,15 @@ async def test_question_embedding_wraps_provider_failure_without_retrying(
 ) -> None:
     calls = 0
 
-    async def create(**_kwargs: Any) -> Any:
+    async def aembed_query(_text: str) -> list[float]:
         nonlocal calls
         calls += 1
         raise RuntimeError("provider unavailable")
 
     monkeypatch.setattr(
         embedding,
-        "client",
-        SimpleNamespace(embeddings=SimpleNamespace(create=create)),
+        "get_embeddings_model",
+        lambda: SimpleNamespace(aembed_query=aembed_query),
     )
 
     with pytest.raises(
