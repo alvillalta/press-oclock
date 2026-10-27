@@ -72,7 +72,7 @@ def test_injected_client_handles_storage_operations_without_credentials(
     )
 
     assert downloaded == b"file contents"
-    assert storage.expires_in == 120
+    assert storage.expires_in == 300
     assert signed_url == (
         "https://storage.example/signed/file?download=report%20final.pdf"
     )
@@ -91,7 +91,7 @@ def test_injected_client_handles_storage_operations_without_credentials(
         ("download", ("folder/file.pdf",), {}),
         (
             "create_signed_url",
-            ("folder/file.pdf", 120),
+            ("folder/file.pdf", 300),
             {"options": {"download": "report final.pdf"}},
         ),
     ]

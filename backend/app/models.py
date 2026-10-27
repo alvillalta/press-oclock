@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any, Optional, TypedDict
 
 from pgvector.sqlalchemy import Vector
@@ -11,7 +11,7 @@ from app.core.config import settings
 
 
 def get_datetime_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # USER

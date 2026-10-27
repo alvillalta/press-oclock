@@ -122,6 +122,7 @@ def test_delete_mail_deletes_its_source_and_chunks(
             )
         ],
     )
+    db.commit()
 
     response = client.delete(
         f"{settings.API_STR}/mails/{mail_id}",
@@ -169,6 +170,7 @@ def test_delete_mail_cleans_attachment_sources_chunks_and_storage(
             )
         ],
     )
+    db.commit()
     storage = FakeAttachmentStorage()
     monkeypatch.setattr(
         "app.services.storage_cleanup_service.AttachmentStorage", lambda: storage

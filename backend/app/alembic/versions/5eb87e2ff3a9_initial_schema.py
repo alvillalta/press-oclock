@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: 9e1470f93d9d
+Revision ID: 5eb87e2ff3a9
 Revises: 
-Create Date: 2026-10-21 08:29:01.469012
+Create Date: 2026-10-26 19:34:34.277487
 
 """
 from alembic import op
@@ -12,7 +12,7 @@ import pgvector.sqlalchemy
 
 
 # revision identifiers, used by Alembic.
-revision = '9e1470f93d9d'
+revision = '5eb87e2ff3a9'
 down_revision = None
 branch_labels = None
 depends_on = None

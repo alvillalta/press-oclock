@@ -500,6 +500,7 @@ def test_delete_user_cleans_mail_sources_and_chunks(
             )
         ],
     )
+    db.commit()
 
     response = client.delete(
         f"{settings.API_STR}/users/{user_id}",

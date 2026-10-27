@@ -17,7 +17,7 @@ bearer_scheme = HTTPBearer()
 api_key_header = APIKeyHeader(name="X-API-Key")
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     with Session(engine) as session:
         yield session
 
