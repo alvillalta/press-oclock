@@ -11,6 +11,7 @@ This project is based on the [Full Stack FastAPI Template](https://github.com/fa
 - [Demo](#demo)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
+- [Runtime and AI Stack](#runtime-and-ai-stack)
 - [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Environment Configuration](#environment-configuration)
@@ -75,10 +76,12 @@ This demo shows the main **Press O'clock** application behavior.
 | Component | Technology | Version |
 |-----------|-----------|---------|
 | **Backend Framework** | FastAPI | ≥0.128.0 |
-| **Runtime** | Python | ≥3.12 |
+| **Runtime** | Python | 3.14 (≥3.14,<3.15) |
 | **Async Server** | Uvicorn | ≥0.40.0 |
 | **ORM** | SQLModel | Latest |
 | **Data Validation** | Pydantic | ≥2.12.5 |
+| **OpenAI SDK** | openai | 3.39.0 |
+| **LangChain OpenAI** | langchain-openai | 1.7.3 |
 | **Database** | PostgreSQL | Latest |
 | **Frontend Framework** | React | Latest |
 | **Build Tool** | Vite | Latest |
@@ -169,6 +172,7 @@ press-oclock/
 │   │
 │   ├── Dockerfile                  # Container image for backend
 │   ├── pyproject.toml              # Python project configuration
+│   ├── uv.lock                     # Locked backend dependencies
 │   ├── alembic.ini                 # Alembic configuration
 │   └── README.md
 │
@@ -237,6 +241,7 @@ press-oclock/
 ├── compose.traefik.yml             # Traefik reverse proxy configuration
 │
 ├── .env-example                    # Environment variables template
+├── .python-version                 # Python version used by uv and CI
 ├── package.json                    # Root Node.js configuration
 ├── .pre-commit-config.yaml         # Pre-commit hooks
 ├── copier.yml                      # Project template configuration
@@ -255,7 +260,7 @@ press-oclock/
 
 ### Prerequisites
 
-- **Python 3.12+**
+- **Python 3.14** (`>=3.14,<3.15`)
 - **Node.js 18+** (for frontend)
 - **pip** or **uv** package manager
 - **Git** (for cloning the repository)
@@ -303,9 +308,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/yourusername/press-oclock.git
 cd press-oclock
 
-# Backend setup
+# Backend setup (uv reads .python-version and installs Python 3.14 if needed)
 cd backend
-uv sync
+uv sync --locked
 cd ..
 
 # Frontend setup
