@@ -9,7 +9,7 @@ from app.models import AugmentedChunksGroup, QuestionBase
 logger = get_logger(__name__)
 
 
-def _build_messages(question: str, prompt_context: str) -> list[BaseMessage]:
+def _build_messages(question: str, prompt_context: str) -> list[BaseMessage]:  # Devuelve una lista de objetos que heredan de BaseMessage (la clase abstracta de mensajes)
     """
     Construye el prompt final para el modelo de IA generativa.
     """

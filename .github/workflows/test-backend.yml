@@ -28,9 +28,6 @@ jobs:
       POSTGRES_PASSWORD: postgres
       MAKE_API_KEY: test_make_api_key
       OPENAI_API_KEY: test_openai_api_key
-      EMBEDDING_MODEL: text-embedding-3-small
-      EMBEDDING_DIMENSIONS: "1536"
-      GENERATION_MODEL: gpt-4o-mini
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -61,9 +58,6 @@ jobs:
           POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
           MAKE_API_KEY=${MAKE_API_KEY}
           OPENAI_API_KEY=${OPENAI_API_KEY}
-          EMBEDDING_MODEL=${EMBEDDING_MODEL}
-          EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS}
-          GENERATION_MODEL=${GENERATION_MODEL}
           EOF
       - run: docker compose down -v --remove-orphans
       - run: docker compose up -d db mailcatcher

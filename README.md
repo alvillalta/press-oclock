@@ -425,18 +425,17 @@ MAIL_ATTACHMENT_MAX_BYTES=5000000
 MAIL_STAGE_RETENTION_HOURS=24
 MAIL_STAGE_RETENTION_DAYS=30
 
-# OpenAI models
+# OpenAI
 OPENAI_API_KEY=your_openai_api_key
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIMENSIONS=1536
-GENERATION_MODEL=gpt-4o-mini
 
 # Docker images (used by Docker Compose)
 DOCKER_IMAGE_BACKEND=backend
 DOCKER_IMAGE_FRONTEND=frontend
 ```
 
-The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `MAIL_WEBHOOK_USER_ID`, `OPENAI_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` and `GENERATION_MODEL`. `MAIL_WEBHOOK_USER_ID` must be a valid UUID and should reference an existing user, since incoming mails are attributed to it. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
+The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `MAIL_WEBHOOK_USER_ID` and `OPENAI_API_KEY`. `MAIL_WEBHOOK_USER_ID` must be a valid UUID and should reference an existing user, since incoming mails are attributed to it. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
+
+LLM model names, temperature, retries and timeout are constants in `backend/app/integrations/openai_client.py`. `EMBEDDING_DIMENSIONS` defaults to `1536` in `backend/app/core/config.py` because it is part of the pgvector schema; changing it requires a database migration and re-embedding stored chunks.
 
 Email attachment ingestion additionally requires a private Supabase Storage bucket matching `SUPABASE_STORAGE_BUCKET`. Keep `SUPABASE_STORAGE_KEY` on the backend only. Expired staged uploads and pending Storage deletions can be cleaned by scheduling `python -m app.cleanup_mail_ingestions` from the backend directory.
 

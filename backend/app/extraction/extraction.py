@@ -85,14 +85,14 @@ system_prompt = f"""
 async def _extract_with_vision(mime_type: str, content: bytes) -> str:
     encoded_image = base64.b64encode(content).decode("ascii")  # Convierte los bytes de la imagen a Base64 (una representación textual de los mismos). Usa ascii, un subconjunto de utf-8, porque está más acotado al tipo de caracteres que devuelve base64
     messages = [
-        SystemMessage(content=system_prompt),
+        SystemMessage(content=system_prompt),  # SystemMessage es un tipo concreto de mensaje para establecer el comportamiento del modelo en base al system_prompt
         HumanMessage(
-            content=[{"type": "image", "base64": encoded_image, "mime_type": mime_type}],  # Content block estándar de LangChain (en este caso han de declararse más campos que en un texto para enviar el contenido de una imágen) portable entre distintos proveedores de LLM
+            content=[{"type": "image", "base64": encoded_image, "mime_type": mime_type}],  # Content block estándar de LangChain (en este caso han de declararse más campos que en un texto para enviar el contenido de una imágen) portable entre distintos proveedores de LLM. ChatOpenAI lo convierte automáticamente a image_url, que es la que usa.
         ),
     ]
 
     try:
-        response = await get_chat_model().ainvoke(messages)
+        response = await get_chat_model().ainvoke(messages)  # ainvoke sirve para invocar el modelo de forma asíncrona y realizar otras tareas mientras tanto
     except Exception as exc:
         raise ImageExtractionError("Image description extraction failed") from exc
 
