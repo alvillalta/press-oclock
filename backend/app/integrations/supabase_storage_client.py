@@ -1,11 +1,13 @@
 from functools import lru_cache
+
 from supabase import Client, create_client
+
 from app.core.config import settings
 
 
 # Cachea el cliente Supabase del Storage, no la base de datos de db.py
 @lru_cache
-def get_supabase_client() -> Client:
+def get_supabase_storage_client() -> Client:
     supabase_url = settings.SUPABASE_STORAGE_URL
     service_role_key = settings.SUPABASE_STORAGE_KEY
     if not supabase_url or not service_role_key:

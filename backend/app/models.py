@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any, Optional, TypedDict
 
 from pgvector.sqlalchemy import Vector
@@ -11,7 +11,7 @@ from app.core.config import settings
 
 
 def get_datetime_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # USER
@@ -234,6 +234,12 @@ class MailStage(MailStageCreate, table=True):
     __table_args__ = (
         UniqueConstraint("user_id", "external_id", name="uq_mail_stage_user_external_id"),
     )
+
+
+class FinalizedMailResult(SQLModel):
+    """Resultado de la finalización de la ingesta de un correo finalize_ingestion()."""
+    mail_id: uuid.UUID
+    finalized_in_this_call: bool
 
 
 class MailStagePublic(SQLModel):

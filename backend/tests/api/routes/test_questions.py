@@ -134,7 +134,7 @@ def test_create_question_embedding_mismatch_returns_502(
     response = client.post(
         f"{settings.API_STR}/questions/",
         headers=normal_user_token_headers,
-        json="What is in my inbox?",
+        params={"question_in": "What is in my inbox?"},
     )
 
     # Respuesta de embeddings incompatible: 502 (no 500)

@@ -11,6 +11,7 @@ This project is based on the [Full Stack FastAPI Template](https://github.com/fa
 - [Demo](#demo)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
+- [Runtime and AI Stack](#runtime-and-ai-stack)
 - [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Environment Configuration](#environment-configuration)
@@ -75,10 +76,12 @@ This demo shows the main **Press O'clock** application behavior.
 | Component | Technology | Version |
 |-----------|-----------|---------|
 | **Backend Framework** | FastAPI | ≥0.128.0 |
-| **Runtime** | Python | ≥3.12 |
+| **Runtime** | Python | 3.14 (≥3.14,<3.15) |
 | **Async Server** | Uvicorn | ≥0.40.0 |
 | **ORM** | SQLModel | Latest |
 | **Data Validation** | Pydantic | ≥2.12.5 |
+| **OpenAI SDK** | openai | 3.39.0 |
+| **LangChain OpenAI** | langchain-openai | 1.7.3 |
 | **Database** | PostgreSQL | Latest |
 | **Frontend Framework** | React | Latest |
 | **Build Tool** | Vite | Latest |
@@ -91,6 +94,38 @@ This demo shows the main **Press O'clock** application behavior.
 | **Authentication** | JWT + Bcrypt | Latest |
 | **Reverse Proxy** | Traefik | Latest |
 | **Containerization** | Docker, Docker Compose | Latest |
+
+---
+
+## Runtime and AI Stack
+
+The backend uses the same Python line across local development, Docker and CI:
+
+- `.python-version` and `backend/pyproject.toml` require **Python 3.14** (`>=3.14,<3.15`).
+- `backend/Dockerfile` builds from `python:3.14`.
+- GitHub Actions workflows read `.python-version`, so CI uses the same interpreter.
+- `backend/uv.lock` is resolved for Python 3.14 only.
+
+The AI dependencies currently installed are:
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `openai` | 3.39.0 | OpenAI SDK used indirectly by the LangChain adapters |
+| `langchain-openai` | 1.7.3 | LangChain adapters for OpenAI chat and embeddings |
+| `langchain-core` | 1.7.0 | Core LangChain interfaces, included transitively |
+
+Chat, vision extraction and embeddings use `ChatOpenAI` and `OpenAIEmbeddings` through cached adapters in `backend/app/integrations/openai_client.py`. The RAG pipeline, SQL/pgvector retrieval, chunking and persistence remain unchanged, and MarkItDown still handles PDF, DOCX, PPTX and XLSX extraction.
+
+When changing Python or AI dependencies:
+
+```bash
+cd backend
+uv add "<package>"
+uv lock --check
+uv sync --locked --python 3.14
+```
+
+Avoid `uv lock --upgrade` unless a full dependency update is intended. Use a disposable PostgreSQL database for tests; do not point the suite at production data.
 
 ---
 
@@ -124,15 +159,15 @@ press-oclock/
 │   │   │   ├── config.py           # Settings & environment variables
 │   │   │   ├── db.py               # Database connection & session management
 │   │   │   ├── logging.py          # Structured logging configuration
-│   │   │   ├── security.py         # JWT authentication & password hashing
-│   │   │   └── openai_client.py    # OpenAI client integration
+│   │   │   └── security.py         # JWT authentication & password hashing
 │   │   │
 │   │   ├── services/
 │   │   │   ├── mail_service.py     # Mail ingestion & embedding pipeline
 │   │   │   └── rag_service.py      # RAG (Retrieval-Augmented Generation)
 │   │   │
 │   │   ├── integrations/
-│   │   │   └── email_provider.py   # Email provider abstraction
+│   │   │   ├── email_provider.py   # Email provider abstraction
+│   │   │   └── openai_client.py    # Cached LangChain OpenAI adapters
 │   │   │
 │   │   ├── rag/
 │   │   │   ├── chunking.py         # Text chunking for embeddings
@@ -169,6 +204,7 @@ press-oclock/
 │   │
 │   ├── Dockerfile                  # Container image for backend
 │   ├── pyproject.toml              # Python project configuration
+│   ├── uv.lock                     # Locked backend dependencies
 │   ├── alembic.ini                 # Alembic configuration
 │   └── README.md
 │
@@ -237,6 +273,7 @@ press-oclock/
 ├── compose.traefik.yml             # Traefik reverse proxy configuration
 │
 ├── .env-example                    # Environment variables template
+├── .python-version                 # Python version used by uv and CI
 ├── package.json                    # Root Node.js configuration
 ├── .pre-commit-config.yaml         # Pre-commit hooks
 ├── copier.yml                      # Project template configuration
@@ -255,7 +292,7 @@ press-oclock/
 
 ### Prerequisites
 
-- **Python 3.12+**
+- **Python 3.14** (`>=3.14,<3.15`)
 - **Node.js 18+** (for frontend)
 - **pip** or **uv** package manager
 - **Git** (for cloning the repository)
@@ -303,9 +340,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/yourusername/press-oclock.git
 cd press-oclock
 
-# Backend setup
+# Backend setup (uv reads .python-version and installs Python 3.14 if needed)
 cd backend
-uv sync
+uv sync --locked
 cd ..
 
 # Frontend setup
@@ -385,22 +422,20 @@ SUPABASE_STORAGE_URL=https://your-project-ref.supabase.co
 SUPABASE_STORAGE_KEY=your_backend_only_service_role_key
 SUPABASE_STORAGE_BUCKET=mail-attachments
 MAIL_ATTACHMENT_MAX_BYTES=5000000
-MAIL_ATTACHMENT_STORAGE_RETRIES=3
 MAIL_STAGE_RETENTION_HOURS=24
 MAIL_STAGE_RETENTION_DAYS=30
 
-# OpenAI models
+# OpenAI
 OPENAI_API_KEY=your_openai_api_key
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIMENSIONS=1536
-GENERATION_MODEL=gpt-4o-mini
 
 # Docker images (used by Docker Compose)
 DOCKER_IMAGE_BACKEND=backend
 DOCKER_IMAGE_FRONTEND=frontend
 ```
 
-The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `MAIL_WEBHOOK_USER_ID`, `OPENAI_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` and `GENERATION_MODEL`. `MAIL_WEBHOOK_USER_ID` must be a valid UUID and should reference an existing user, since incoming mails are attributed to it. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
+The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `MAIL_WEBHOOK_USER_ID` and `OPENAI_API_KEY`. `MAIL_WEBHOOK_USER_ID` must be a valid UUID and should reference an existing user, since incoming mails are attributed to it. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
+
+LLM model names, temperature, retries and timeout are constants in `backend/app/integrations/openai_client.py`. `EMBEDDING_DIMENSIONS` defaults to `1536` in `backend/app/core/config.py` because it is part of the pgvector schema; changing it requires a database migration and re-embedding stored chunks.
 
 Email attachment ingestion additionally requires a private Supabase Storage bucket matching `SUPABASE_STORAGE_BUCKET`. Keep `SUPABASE_STORAGE_KEY` on the backend only. Expired staged uploads and pending Storage deletions can be cleaned by scheduling `python -m app.cleanup_mail_ingestions` from the backend directory.
 

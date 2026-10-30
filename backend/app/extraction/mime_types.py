@@ -7,18 +7,21 @@ SUPPORTED_ATTACHMENT_TYPES: dict[str, tuple[str, ...]] = {
     ".pdf": ("application/pdf",),
     ".txt": ("text/plain",),
     ".md": ("text/markdown", "text/x-markdown", "text/plain"),
-    ".docx": (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ),
+    ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document",),
+    ".pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation",),
+    ".xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",),
+    ".jpg": ("image/jpeg",),
+    ".jpeg": ("image/jpeg",),
+    ".png": ("image/png",),
+    ".webp": ("image/webp",),
 }
 # Valores por defecto que pueden llegar o si llega vacío
 GENERIC_MIME_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 
 MimeTypeValidation: TypeAlias = tuple[
     str | None,  # normalized_mime_type
-    str | None  # unsupported_reason
+    str | None,  # unsupported_reason
 ]
-
 
 def get_attachment_mime_type(filename: str, mime_type: str) -> MimeTypeValidation:
     """

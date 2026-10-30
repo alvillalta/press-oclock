@@ -100,7 +100,7 @@ def get_metadata(
     # Para cada grupo crea un diccionario nuevo que conserva sus campos originales y añade el diccionario específico de details. Si no encontró metadatos para ese ID, usa {}
     return [
         {
-            **group,  # **group desempaqueta todos los datos originales para copiarlos al nuevo diccionario 
+            **group,  # **group desempaqueta todos los datos originales para copiarlos al nuevo diccionario
             "details": details_by_source_id.get(group["source_id"], {}),
         }
         for group in augmented_chunk_groups

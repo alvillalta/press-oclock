@@ -51,7 +51,7 @@ def _read_attachment_metadata(
 
 
 async def _read_upload(upload: UploadFile) -> tuple[bytes, int, bool]:
-    """Lee un archivo de subida por partes para no cargar todo en memoria de golpe."""
+    """Lee un archivo de subida por partes para no cargar en memoria un archivo arbitrariamente grande."""
     max_bytes = settings.MAIL_ATTACHMENT_MAX_BYTES
     size_bytes = 0
     content = bytearray()  # Buffer (Acumulador de memoria temporal)

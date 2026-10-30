@@ -1,21 +1,15 @@
-import asyncio
 from datetime import datetime
 
-from openai.types.chat import (
-    ChatCompletionMessageParam,  # Formato de salida de la API de OpenAI
-)
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from app.core.config import settings
 from app.core.logging import get_logger
-from app.integrations.openai_client import get_openai_client
+from app.integrations.openai_client import get_chat_model
 from app.models import AugmentedChunksGroup, QuestionBase
 
 logger = get_logger(__name__)
 
-client = get_openai_client()
 
-
-def _build_messages(question: str, prompt_context: str) -> list[ChatCompletionMessageParam]:
+def _build_messages(question: str, prompt_context: str) -> list[BaseMessage]:  # Devuelve una lista de objetos que heredan de BaseMessage (la clase abstracta de mensajes)
     """
     Construye el prompt final para el modelo de IA generativa.
     """
@@ -45,19 +39,14 @@ def _build_messages(question: str, prompt_context: str) -> list[ChatCompletionMe
         {question}
     """
 
-    # Formato de entrada para la API de OpenAI
     return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
     ]
 
 
 class GenerationService:
     """Servicio para construir el contexto del prompt y generar la respuesta."""
-
-    def __init__(self, max_retries: int = 3, wait_seconds: int = 2):
-        self.max_retries = max_retries
-        self.wait_seconds = wait_seconds
 
     def build_prompt_context(self, augmented_chunk_groups: list[AugmentedChunksGroup]) -> str:
         """
@@ -115,19 +104,10 @@ class GenerationService:
         prompt_context = self.build_prompt_context(augmented_chunk_groups)
         messages = _build_messages(question_in, prompt_context)
 
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                response = await client.chat.completions.create(
-                    model=settings.GENERATION_MODEL,
-                    messages=messages,
-                )
-                break
-            except Exception as exc:
-                logger.warning(
-                    "Generation failed (attempt %s/%s): %s", attempt, self.max_retries, exc
-                )
-                if attempt == self.max_retries:
-                    raise RuntimeError("Answer generation failed") from exc
-                await asyncio.sleep(self.wait_seconds * attempt)
+        try:
+            response = await get_chat_model().ainvoke(messages)
+        except Exception as exc:
+            logger.warning("Generation failed: %s", exc)
+            raise RuntimeError("Answer generation failed") from exc
 
-        return response.choices[0].message.content or ""
+        return response.text or ""

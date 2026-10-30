@@ -2,7 +2,7 @@
 name = "app"
 version = "0.1.0"
 description = ""
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "fastapi[standard]<1.0.0,>=0.114.2",
     "python-multipart<1.0.0,>=0.0.27",
@@ -20,8 +20,10 @@ dependencies = [
     "pyjwt<3.0.0,>=2.8.0",
     "pwdlib[argon2,bcrypt]>=0.3.0",
     "pgvector>=0.4.2",
-    "openai>=2.43.0",
+    "openai>=2.45.0",
     "supabase>=2.10.0,<3.0.0",
+    "markitdown[docx,pdf,pptx,xlsx]>=0.1.9",
+    "langchain-openai>=1.7.3,<2.0.0",
 ]
 
 [dependency-groups]
@@ -47,7 +49,7 @@ strict = true
 exclude = ["venv", ".venv", "alembic"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py314"
 exclude = ["alembic"]
 
 [tool.ruff.lint]

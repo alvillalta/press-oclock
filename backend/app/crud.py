@@ -146,6 +146,7 @@ def get_pending_storage_cleanup(
         .limit(limit)
     )
     # Lee estrictamente después del último registro procesado (para traer el siguiente lote de la consulta)
+    query = query_base
     if after_created_at is not None and after_id is not None:
         query = query_base.where(
             tuple_(StorageCleanup.created_at, StorageCleanup.id)

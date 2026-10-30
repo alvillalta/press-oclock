@@ -1,18 +1,18 @@
 import uuid
 import warnings
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     AnyUrl,
     BeforeValidator,
     EmailStr,
+    Field,
     HttpUrl,
     PostgresDsn,
     computed_field,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Self
 
 
 def parse_cors(v: Any) -> list[str] | str:
@@ -107,7 +107,6 @@ class Settings(BaseSettings):
     MAIL_WEBHOOK_USER_ID: uuid.UUID
 
     MAIL_ATTACHMENT_MAX_BYTES: int = 5_000_000
-    MAIL_ATTACHMENT_STORAGE_RETRIES: int = 3
     MAIL_STAGE_RETENTION_HOURS: int = 24
     MAIL_STAGE_RETENTION_DAYS: int = 30
 
@@ -116,9 +115,9 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET: str = "mail-attachments"
 
     OPENAI_API_KEY: str
-    EMBEDDING_MODEL: str
-    EMBEDDING_DIMENSIONS: int
-    GENERATION_MODEL: str
+    GENERATION_MODEL: str = "gpt-4o-mini"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSIONS: int = Field(default=1536, gt=0)  # Las dimensiones tienen que venir aquí para contratos del esquema, validaciones, etc. que son sensibles a sí algún día se cambia el valor 
 
     # Validaciones
     def _check_default_secret(self, var_name: str, value: str | None) -> None:

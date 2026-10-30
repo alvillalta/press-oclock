@@ -27,8 +27,10 @@ def create_random_mail(
         body=body,
         external_id=random_lower_string()[:16],
     )
-    return crud.create_mail(
+    mail = crud.create_mail(
         session=db,
         mail_in=mail_in,
         user_id=user_id,
     )
+    db.commit()
+    return mail
