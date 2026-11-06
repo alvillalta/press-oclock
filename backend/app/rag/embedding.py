@@ -6,8 +6,8 @@ from app.models import ChunkBase, ChunkCreate, QuestionBase, QuestionEmbedding
 logger = get_logger(__name__)
 
 
-# Levanta el error si las dimensiones del embedding no coinciden con las esperadas de manera que no bloquee cada operación que necesite embeddings
-# Se tiene que declarar aparte porque no hay un error tipificado para ello
+# Levanta el error si el proveedor de embeddings respondió algo que no cumple el contrato que espera la aplicación (dimensiones o cantidad de chunks desfasada)
+# Se tiene que declarar aparte porque no hay un error tipificado para ello 
 class EmbeddingResponseError(ValueError):
     """Respuesta de embeddings incompatible con la configuración esperada."""
 

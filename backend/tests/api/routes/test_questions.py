@@ -122,7 +122,7 @@ def test_create_question_embedding_mismatch_returns_502(
         def __init__(self, session: object) -> None:
             self.session = session
 
-        async def answer_question(
+        async def rag_answer(
             self, *, question_in: str, user_id: uuid.UUID
         ) -> None:
             raise EmbeddingResponseError(

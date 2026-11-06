@@ -13,7 +13,7 @@ def get_citations(
         """
         logger.info("Creating source citations")
 
-        # Crea un diccionario con CLAVE: source_id -> VALOR: instancia de grupo de chunks
+        # Crea un diccionario con CLAVE: source_id -> VALOR: instancia de grupo de chunks aumentados
         metadata_by_source_id = {
             group["source_id"]: group for group in augmented_chunk_groups
         }

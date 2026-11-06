@@ -64,7 +64,7 @@ async def create_question(
     logger.info("Routing question")
     rag_service = RagService(session=session)
     try:
-        question = await rag_service.answer_question(
+        question = await rag_service.rag_answer(
             question_in=question_in, user_id=current_user.id
         )
     except EmbeddingResponseError as exc:
@@ -73,7 +73,7 @@ async def create_question(
         raise HTTPException(status_code=404, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
-    
+
     return QuestionPublic.model_validate(question)
 
 
