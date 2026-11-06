@@ -1,6 +1,6 @@
 # Press O'Clock
 
-**Press O'Clock** is a RAG-based conversational assistant for journalists that centralizes press releases received via email, enabling natural language queries. Built as a full-stack application, it combines a **FastAPI** backend with a **React + TypeScript** frontend.
+**Press O'Clock** is an agentic RAG conversational assistant for journalists that centralizes press releases received via email, enabling natural language queries. Built as a full-stack application, it combines a **FastAPI** backend with a **React + TypeScript** frontend.
 
 This project is based on the [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template).
 
@@ -47,7 +47,7 @@ This demo shows the main **Press O'clock** application behavior.
 
 ### Core Features
 
-- **RAG-based conversational search** - Leverages OpenAI embeddings and pgvector for intelligent similarity search over press releases
+- **Agentic RAG-based conversational search** - The agent decides whether to answer directly or search the user's emails, using OpenAI embeddings and pgvector for intelligent similarity search over press releases
 - **Optimized context retrieval** - Expands retrieved context with contiguous chunks for better LLM responses
 - **Source traceability** - Every response links back to original sources, including text excerpts and email metadata
 - **Automated email ingestion** - Make.com webhook integration decouples email capture from internal processing
@@ -111,10 +111,11 @@ The AI dependencies currently installed are:
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `openai` | 3.39.0 | OpenAI SDK used indirectly by the LangChain adapters |
+| `langchain` | 1.4.7 | Agent orchestration through `create_agent` |
 | `langchain-openai` | 1.7.3 | LangChain adapters for OpenAI chat and embeddings |
 | `langchain-core` | 1.7.0 | Core LangChain interfaces, included transitively |
 
-Chat, vision extraction and embeddings use `ChatOpenAI` and `OpenAIEmbeddings` through cached adapters in `backend/app/integrations/openai_client.py`. The RAG pipeline, SQL/pgvector retrieval, chunking and persistence remain unchanged, and MarkItDown still handles PDF, DOCX, PPTX and XLSX extraction.
+Chat, vision extraction and embeddings use `ChatOpenAI` and `OpenAIEmbeddings` through cached adapters in `backend/app/integrations/openai_client.py`. The agent decides between answering directly and searching the user's emails; retrieval still uses SQL/pgvector, chunking and persistence as before, and MarkItDown still handles PDF, DOCX, PPTX and XLSX extraction.
 
 When changing Python or AI dependencies:
 
@@ -170,6 +171,8 @@ press-oclock/
 │   │   │   └── openai_client.py    # Cached LangChain OpenAI adapters
 │   │   │
 │   │   ├── rag/
+│   │   │   ├── agent.py            # Agent that decides when to search
+│   │   │   ├── tools.py            # User-scoped email search tool
 │   │   │   ├── chunking.py         # Text chunking for embeddings
 │   │   │   ├── embedding.py        # Embedding generation
 │   │   │   ├── generation.py       # Answer generation logic

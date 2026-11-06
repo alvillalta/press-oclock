@@ -1,25 +1,9 @@
-from datetime import datetime, timezone
-from types import SimpleNamespace
-from typing import Any
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
-
-import pytest
-from langchain_core.messages import AIMessage
 
 from app.core.config import settings
 from app.models import AugmentedChunksGroup, Chunk
-from app.rag import generation
-from app.rag.generation import GenerationService
-
-
-def fake_chat_model(ainvoke: Any) -> tuple[Any, dict[str, int]]:
-    calls = {"ainvoke": 0}
-
-    async def invoke_wrapper(messages: Any, **kwargs: Any) -> Any:
-        calls["ainvoke"] += 1
-        return await ainvoke(messages, **kwargs)
-
-    return SimpleNamespace(ainvoke=invoke_wrapper), calls
+from app.rag.generation import format_augmented_context
 
 
 def make_chunk(source_id: UUID, position: int, content: str) -> Chunk:
@@ -31,10 +15,10 @@ def make_chunk(source_id: UUID, position: int, content: str) -> Chunk:
     )
 
 
-def test_build_prompt_context_includes_metadata_and_content() -> None:
+def test_format_augmented_context_includes_metadata_and_content() -> None:
     source_id = uuid4()
     mail_id = uuid4()
-    received_at = datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)
+    received_at = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
     group: AugmentedChunksGroup = {
         "source_id": source_id,
         "origin": "mail",
@@ -50,7 +34,7 @@ def test_build_prompt_context_includes_metadata_and_content() -> None:
         ],
     }
 
-    context = GenerationService().build_prompt_context([group])
+    context = format_augmented_context([group])
 
     assert "FUENTE 1" in context
     assert "Origin: mail" in context
@@ -61,7 +45,7 @@ def test_build_prompt_context_includes_metadata_and_content() -> None:
     assert "Content: Primer chunk.\nSegundo chunk." in context
 
 
-def test_build_prompt_context_separates_multiple_sources() -> None:
+def test_format_augmented_context_separates_multiple_sources() -> None:
     first_source_id = uuid4()
     second_source_id = uuid4()
     groups: list[AugmentedChunksGroup] = [
@@ -79,59 +63,8 @@ def test_build_prompt_context_separates_multiple_sources() -> None:
         },
     ]
 
-    context = GenerationService().build_prompt_context(groups)
+    context = format_augmented_context(groups)
 
     assert "FUENTE 1" in context
     assert "FUENTE 2" in context
     assert "\n---\n" in context
-
-
-@pytest.mark.anyio
-async def test_generation_succeeds_on_first_attempt(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def ainvoke(_messages: Any, **_kwargs: Any) -> Any:
-        return AIMessage(content="Respuesta")
-
-    model, calls = fake_chat_model(ainvoke)
-    monkeypatch.setattr(generation, "get_chat_model", lambda: model)
-
-    answer = await GenerationService().generate_answer("Pregunta", [])
-
-    assert answer == "Respuesta"
-    assert calls["ainvoke"] == 1
-
-
-@pytest.mark.anyio
-async def test_generation_wraps_provider_failure_without_retrying(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def ainvoke(_messages: Any, **_kwargs: Any) -> Any:
-        raise RuntimeError("boom")
-
-    model, calls = fake_chat_model(ainvoke)
-    monkeypatch.setattr(generation, "get_chat_model", lambda: model)
-
-    with pytest.raises(
-        RuntimeError, match="Answer generation failed"
-    ) as exc_info:
-        await GenerationService().generate_answer("Pregunta", [])
-
-    assert isinstance(exc_info.value.__cause__, RuntimeError)
-    assert calls["ainvoke"] == 1
-
-
-@pytest.mark.anyio
-async def test_generation_empty_answer_is_not_retried(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def ainvoke(_messages: Any, **_kwargs: Any) -> Any:
-        return AIMessage(content="")
-
-    model, calls = fake_chat_model(ainvoke)
-    monkeypatch.setattr(generation, "get_chat_model", lambda: model)
-
-    answer = await GenerationService().generate_answer("Pregunta", [])
-
-    assert answer == ""
-    assert calls["ainvoke"] == 1
