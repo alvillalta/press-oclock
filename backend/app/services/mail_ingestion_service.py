@@ -130,6 +130,7 @@ class MailIngestionService:
             )
         return public_mail_stage(finalized_stage)
 
+
     def start_ingestion(
         self, *, mail_in: MailStageCreate, user_id: UUID
     ) -> MailStagePublic:
@@ -180,6 +181,7 @@ class MailIngestionService:
             raise  # Un raise sin argumento vuelve a lanzar la excepción que capturó el except
         self.session.refresh(stage)
         return public_mail_stage(stage)
+
 
     async def stage_attachment(
         self,
@@ -341,6 +343,7 @@ class MailIngestionService:
         self.session.add(attachment_stage)
         self.session.commit()
         return public_attachment_stage(attachment_stage)
+
 
     async def finalize_ingestion(
         self, ingestion_id: UUID, user_id: UUID

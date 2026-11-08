@@ -5,7 +5,7 @@ from sqlmodel import Session
 from app.core.logging import get_logger
 from app.crud import create_question
 from app.models import Question, QuestionBase, QuestionCreate
-from app.rag.rag_agent import AgentService
+from app.rag.rag_agent import RagAgentService
 
 logger = get_logger(__name__)
 
@@ -22,7 +22,7 @@ class RagService:
         """
         logger.info("Answering and persisting question")
 
-        agent_response = await AgentService().agent_answer(
+        agent_response = await RagAgentService().agent_answer(
             question_in,
             session=self.session,
             user_id=user_id,

@@ -84,7 +84,7 @@ def get_rag_agent() -> Any:  # Any para evitar errores con el tipo de retorno ya
     )
 
 
-class AgentService:
+class RagAgentService:
     """Orquesta al agente que decide entre responder o buscar en los correos."""
 
     async def agent_answer(
