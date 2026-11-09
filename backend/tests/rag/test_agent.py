@@ -234,13 +234,15 @@ async def test_agent_search_builds_citations_from_user_evidence(
         fake_generate_question_embedding,
     )
 
+    max_agent_steps = 4
+
     async def behavior(
         tools: list[Any],
         agent_input: dict[str, Any],
         context: RagAgentContext,
         config: dict[str, Any],
     ) -> dict[str, Any]:
-        assert config["recursion_limit"] == agent_module.MAX_AGENT_STEPS
+        assert config["recursion_limit"] == max_agent_steps
         assert context.session is db
         assert context.user_id == first_user.id
 
@@ -266,7 +268,7 @@ async def test_agent_search_builds_citations_from_user_evidence(
 
     install_fake_agent(monkeypatch, behavior)
 
-    response = await RagAgentService().agent_answer(
+    response = await RagAgentService(max_agent_steps=max_agent_steps).agent_answer(
         "¿Cuándo fue la rueda de prensa?",
         session=db,
         user_id=first_user.id,

@@ -35,6 +35,7 @@ jobs:
       POSTGRES_PASSWORD: postgres
       MAKE_API_KEY: test_make_api_key
       OPENAI_API_KEY: test_openai_api_key
+      TYPESAFE_API_KEY: test_typesafe_api_key
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -61,6 +62,7 @@ jobs:
           POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
           MAKE_API_KEY=${MAKE_API_KEY}
           OPENAI_API_KEY=${OPENAI_API_KEY}
+          TYPESAFE_API_KEY=${TYPESAFE_API_KEY}
           EOF
       - run: docker compose build
       - run: docker compose down -v --remove-orphans

@@ -126,7 +126,7 @@ async def ingest_mail(
     ),
     # File es como Form pero indica que el valor que recibe puede ser binario
     # Se tiene que enviar en un formulario aparte porque multipart/form-data de HTTP no acepta más de un campo cuando se envía un archivo
-    files: list[UploadFile] = File(default=[]),  
+    files: list[UploadFile] = File(default=[]),
     _api_key: MakeApiKeyDep,
 ) -> MailStagePublic:
     """
@@ -171,7 +171,7 @@ async def ingest_mail(
     # Cargador asíncrono de cada adjunto para irlos procesando de uno en uno, yield envía a MailIngestionService y pone en pausa el bucle for hasta que vuelve a tener luz verde por parte del servicio de ingestión
     # A través de esta iteración asíncrona evita cargar en memoria los bytes de todos los archivos de una tacada
     async def iter_attachments() -> AsyncIterator[AttachmentUpload]:  # Indica que la lista de AttachmentUpload se consume de forma asíncrona
-        for external_id, upload in zip(raw_external_ids, files, strict=True):  
+        for external_id, upload in zip(raw_external_ids, files, strict=True):
             content, size_bytes, too_large = await _read_upload(upload)  # Extrae los datos del archivo adjunto en una tupla
             yield AttachmentUpload(  # yield es como un return pero simplemente pausa la ejecución de la función en vez de finalizarla
                 external_id=external_id,
@@ -189,6 +189,7 @@ async def ingest_mail(
             mail_in=mail_in,
             user_id=webhook_user_id,
             attachments=iter_attachments(),
+            attachment_external_ids=raw_external_ids,
         )
     except MailIngestionError as exc:
         raise HTTPException(status_code=500, detail=str(exc))

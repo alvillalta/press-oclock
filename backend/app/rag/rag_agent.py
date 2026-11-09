@@ -21,10 +21,6 @@ from app.schemas.langchain_dtos import RagAgentContext, RagAgentResponse, RagAge
 
 logger = get_logger(__name__)
 
-# Medida de seguridad de los pasos que el agente puede ejecutar para prevenir atascos en bucles infinitos de procesamiento
-MAX_AGENT_STEPS = 6
-NO_ANSWER_MESSAGE = "No pude generar una respuesta en este momento."
-
 SYSTEM_PROMPT = """
 Eres un asistente para periodistas que trabaja con las fuentes del usuario.
 
@@ -41,6 +37,8 @@ REGLAS:
 - No inventes ni completes con conocimiento general los hechos específicos.
 - No menciones el funcionamiento interno de las herramientas ni del sistema RAG.
 """
+
+NO_ANSWER_MESSAGE = "No pude generar una respuesta en este momento."
 
 
 def _extract_answer(messages: object) -> str:
@@ -87,6 +85,10 @@ def get_rag_agent() -> Any:  # Any para evitar errores con el tipo de retorno ya
 class RagAgentService:
     """Orquesta al agente que decide entre responder o buscar en los correos."""
 
+    def __init__(self, max_agent_steps: int = 6) -> None:
+        # Medida de seguridad de los pasos que el agente puede ejecutar para prevenir bucles infinitos
+        self.max_agent_steps = max_agent_steps
+
     async def agent_answer(
         self,
         question: QuestionBase,
@@ -108,7 +110,7 @@ class RagAgentService:
                     "search_error_message": None,
                 },
                 context=RagAgentContext(session=session, user_id=user_id),
-                config={"recursion_limit": MAX_AGENT_STEPS},
+                config={"recursion_limit": self.max_agent_steps},  # Se añade posteriormente al cacheo del agente por si quisiesemos cambiar el valor para esta instancia
             )
         # Los errores se terminan de transformar aquí, RagService() no los recoge porque ya no necesita hacerles nada más y estos suben implícitamente hasta la API para convertirse en errores HTTP
         except Exception as exc:
