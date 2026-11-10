@@ -115,9 +115,9 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET: str = "mail-attachments"
 
     OPENAI_API_KEY: str
-    GENERATION_MODEL: str = "gpt-4o-mini"
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
-    EMBEDDING_DIMENSIONS: int = Field(default=1536, gt=0)  # Las dimensiones tienen que venir aquí para contratos del esquema, validaciones, etc. que son sensibles a sí algún día se cambia el valor 
+    EMBEDDING_DIMENSIONS: int = Field(default=1536, gt=0)  # Las dimensiones tienen que venir aquí para contratos con la base de datos, validaciones, etc. que son sensibles a sí algún día se cambia el valor 
+    
+    TYPESAFE_API_KEY: str
 
     # Validaciones
     def _check_default_secret(self, var_name: str, value: str | None) -> None:

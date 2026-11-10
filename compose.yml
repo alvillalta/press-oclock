@@ -77,6 +77,7 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - MAKE_API_KEY=${MAKE_API_KEY?Variable not set}
       - OPENAI_API_KEY=${OPENAI_API_KEY?Variable not set}
+      - TYPESAFE_API_KEY=${TYPESAFE_API_KEY?Variable not set}
 
   backend:
     image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
@@ -112,6 +113,7 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - MAKE_API_KEY=${MAKE_API_KEY?Variable not set}
       - OPENAI_API_KEY=${OPENAI_API_KEY?Variable not set}
+      - TYPESAFE_API_KEY=${TYPESAFE_API_KEY?Variable not set}
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/utils/health-check/"]

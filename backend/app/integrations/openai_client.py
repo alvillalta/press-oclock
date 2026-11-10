@@ -11,7 +11,7 @@ from app.core.config import settings
 def get_chat_model() -> ChatOpenAI:
     return ChatOpenAI(
         api_key=SecretStr(settings.OPENAI_API_KEY),  # Lo ideal sería llevar SecretStr a config.py y aplicarlo para el resto de valores que deberían ser secretos si se hacen logs, etc.
-        model=settings.GENERATION_MODEL,
+        model="gpt-4o-mini",
         temperature=0.4,
         max_retries=2,  # 3 intentos totales
         timeout=60.0,
@@ -21,7 +21,7 @@ def get_chat_model() -> ChatOpenAI:
 def get_agent_model() -> ChatOpenAI:
     return ChatOpenAI(
         api_key=SecretStr(settings.OPENAI_API_KEY),
-        model=settings.GENERATION_MODEL,
+        model="gpt-4o-mini",
         temperature=0.1,
         max_retries=1,  # Reintento extra si el agente llama al modelo en uno de sus pasos
         timeout=45.0,
@@ -32,7 +32,7 @@ def get_agent_model() -> ChatOpenAI:
 def get_embeddings_model() -> OpenAIEmbeddings:
     return OpenAIEmbeddings(
         api_key=SecretStr(settings.OPENAI_API_KEY),
-        model=settings.EMBEDDING_MODEL,
+        model="text-embedding-3-small",
         dimensions=settings.EMBEDDING_DIMENSIONS,
         max_retries=2,
         timeout=60.0,

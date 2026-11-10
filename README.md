@@ -431,14 +431,17 @@ MAIL_STAGE_RETENTION_DAYS=30
 # OpenAI
 OPENAI_API_KEY=your_openai_api_key
 
+# TypeSafe / Jev
+TYPESAFE_API_KEY=your_typesafe_api_key
+
 # Docker images (used by Docker Compose)
 DOCKER_IMAGE_BACKEND=backend
 DOCKER_IMAGE_FRONTEND=frontend
 ```
 
-The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `MAIL_WEBHOOK_USER_ID` and `OPENAI_API_KEY`. `MAIL_WEBHOOK_USER_ID` must be a valid UUID and should reference an existing user, since incoming mails are attributed to it. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
+The following variables are **required** — the app will not start without them: `SECRET_KEY`, `PROJECT_NAME`, `POSTGRES_SERVER`, `POSTGRES_USER`, `FIRST_SUPERUSER`, `FIRST_SUPERUSER_PASSWORD`, `MAKE_API_KEY`, `MAIL_WEBHOOK_USER_ID`, `OPENAI_API_KEY` and `TYPESAFE_API_KEY`. `MAIL_WEBHOOK_USER_ID` must be a valid UUID and should reference an existing user, since incoming mails are attributed to it. The API prefix (`/api`) and token/email-reset expirations have safe defaults.
 
-LLM model names, temperature, retries and timeout are constants in `backend/app/integrations/openai_client.py`. `EMBEDDING_DIMENSIONS` defaults to `1536` in `backend/app/core/config.py` because it is part of the pgvector schema; changing it requires a database migration and re-embedding stored chunks.
+OpenAI model names, temperature, retries and timeouts are constants in `backend/app/integrations/openai_client.py`. The TypeSafe model and timeout are constants in `backend/app/integrations/typesafe_client.py`. Mail triage thresholds and body limits are defined in `backend/app/triage/triage_policy.py` and `backend/app/services/mail_triage_service.py`. `EMBEDDING_DIMENSIONS` defaults to `1536` in `backend/app/core/config.py` because it is part of the pgvector schema; changing it requires a database migration and re-embedding stored chunks.
 
 Email attachment ingestion additionally requires a private Supabase Storage bucket matching `SUPABASE_STORAGE_BUCKET`. Keep `SUPABASE_STORAGE_KEY` on the backend only. Expired staged uploads and pending Storage deletions can be cleaned by scheduling `python -m app.cleanup_mail_ingestions` from the backend directory.
 

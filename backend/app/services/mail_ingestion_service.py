@@ -25,8 +25,10 @@ from app.models import (
     MailStageCreate,
     MailStagePublic,
 )
+from app.services.mail_triage_service import MailTriageService
 
 logger = get_logger(__name__)
+
 
 # Levanta el error si fallan las suposiciones internas del flujo de la aplicación sobre algo que esperaba que no está
 # Se tiene que declarar aparte porque no hay un error tipificado para ello
@@ -57,10 +59,14 @@ def public_attachment_stage(stage: AttachmentStage) -> AttachmentStagePublic:
 
 class MailIngestionService:
     def __init__(
-        self, session: Session, storage: AttachmentStorage | None = None
+        self,
+        session: Session,
+        storage: AttachmentStorage | None = None,
+        triage_service: MailTriageService | None = None,
     ):
         self.session = session
         self.storage = storage or AttachmentStorage()
+        self.triage_service = triage_service or MailTriageService()
         self.attachment_storage_retries: int = 3
 
     async def ingest_mail(
@@ -69,6 +75,7 @@ class MailIngestionService:
         mail_in: MailStageCreate,
         user_id: UUID,
         attachments: AsyncIterable[AttachmentUpload],
+        attachment_external_ids: list[str],
     ) -> MailStagePublic:
         """Orquesta la ingesta completa de un correo y todos sus adjuntos."""
         logger.info("Orchestrating mail and attachments ingestion")
@@ -82,25 +89,58 @@ class MailIngestionService:
 
         ingestion_id = stage.ingestion_id  # Es el id del objeto mail_stage
 
-        # Solicita los adjuntos uno a uno al cargador asíncrono de mails.py hasta terminar de procesarlos todos
-        async for attachment in attachments:
-            await self.stage_attachment(
-                ingestion_id=ingestion_id,
-                user_id=user_id,
-                external_id=attachment.external_id,
-                filename=attachment.filename,
-                mime_type=attachment.mime_type,
-                content=attachment.content,
-                oversize=attachment.oversize,
-                measured_size=attachment.measured_size,
+        # Primer filtro rápido para bloquear correos sin leer sus adjuntos
+        triage_decision = await self.triage_service.screen_mail(
+            sender=mail_in.sender,
+            subject=mail_in.subject,
+            body=mail_in.body,
+        )
+
+        # Asignación de una expresión booleana True/False a evaluar posteriormente
+        blocked = triage_decision.status == "blocked"  
+
+        if blocked:
+            logger.info(
+                "Mail triage blocked attachment storage and RAG processing (%s)",
+                triage_decision.blocked_by,
+            )
+        elif triage_decision.status == "review":
+            logger.info(
+                "Mail triage marked the mail for review (%s)",
+                triage_decision.reason,
             )
 
+        if not blocked:
+            # Solicita los adjuntos uno a uno al cargador asíncrono de mails.py hasta terminar de procesarlos todos
+            async for attachment in attachments:
+                await self.stage_attachment(
+                    ingestion_id=ingestion_id,
+                    user_id=user_id,
+                    external_id=attachment.external_id,
+                    filename=attachment.filename,
+                    mime_type=attachment.mime_type,
+                    content=attachment.content,
+                    oversize=attachment.oversize,
+                    measured_size=attachment.measured_size,
+                )
+
+        # Carga del resumen de adjuntos omitidos si el correo se ha bloqueado (l)
+        omitted_attachment_summary: list[dict[str, str]] = [
+            {
+                "external_id": external_id, 
+                "reason": "mail_triage_blocked"
+            }
+            for external_id in attachment_external_ids
+            if blocked 
+        ]
+        
         finalized_mail_result = await self.finalize_ingestion(
             ingestion_id=ingestion_id,
             user_id=user_id,
+            omitted_attachment_summary=omitted_attachment_summary,
         )
         # Evalúa finalized_in_this call para procesar únicamente la rama ligada que ha persistido los datos, evitando problemas de concurrencia y de repetición de mails que ya hubiesen sido completados
-        if finalized_mail_result.finalized_in_this_call:
+        if finalized_mail_result.finalized_in_this_call and not blocked:
             try:
                 await MailProcessingService(session=self.session).process_mail_body(
                     mail_id=finalized_mail_result.mail_id
@@ -120,7 +160,9 @@ class MailIngestionService:
                     storage=self.storage,
                 ).process_mail_attachments(mail_id=finalized_mail_result.mail_id)
             except Exception:
-                logger.exception("Attachment extraction indexing failed after mail finalization")
+                logger.exception(
+                    "Attachment extraction indexing failed after mail finalization"
+                )
 
         # Devuelve MailStagePublic
         finalized_stage = self.session.get(MailStage, ingestion_id)
@@ -130,6 +172,15 @@ class MailIngestionService:
             )
         return public_mail_stage(finalized_stage)
 
+    @staticmethod
+    def _blocked_attachment_summary(
+        attachment_external_ids: list[str],
+    ) -> list[dict[str, str]]:
+        return [
+            {"external_id": external_id, "reason": "mail_triage_blocked"}
+            for external_id in attachment_external_ids
+        ]
+
     def start_ingestion(
         self, *, mail_in: MailStageCreate, user_id: UUID
     ) -> MailStagePublic:
@@ -137,8 +188,8 @@ class MailIngestionService:
 
         existing_mail = self.session.exec(
             select(Mail).where(
-                Mail.user_id == user_id,
-                Mail.external_id == mail_in.external_id
+                Mail.user_id == user_id, 
+                Mail.external_id == mail_in.external_id,
             )
         ).first()
         if existing_mail is not None:
@@ -191,7 +242,7 @@ class MailIngestionService:
         mime_type: str,
         content: bytes,
         oversize: bool = False,
-        measured_size: int
+        measured_size: int,
     ) -> AttachmentStagePublic:
         logger.info("Creating an attachment stage")
         # Trae la instancia de MailStage a la que asociar el adjunto
@@ -213,7 +264,7 @@ class MailIngestionService:
                 AttachmentStage.external_id == external_id,
             )
         ).first()
-        if existing_attachment_stage is not None and existing_attachment_stage.status != "pending":
+        if (existing_attachment_stage is not None and existing_attachment_stage.status != "pending"):
             return public_attachment_stage(existing_attachment_stage)
 
         # Construcción de attachment_stage si no existe (podría tener status pendiente si no)
@@ -254,6 +305,10 @@ class MailIngestionService:
             self.session.add(mail_stage)
             self.session.commit()
             return public_attachment_stage(attachment_stage)
+
+        # Si después de haber comprobado unsupported_reason, normalized_mime_type es None, significa que el programa ha fallado
+        if normalized_mime_type is None:
+            raise MailIngestionError("Attachment MIME type could not be normalized")
 
         # Genera una ruta para el adjunto que apunta a Supabase Storage
         # Comprobación para evitar errores silenciosos a la hora de asignar storage_path
@@ -331,7 +386,8 @@ class MailIngestionService:
             # El stage podría borrarse de forma muy improbable, por ejemplo, si el servidor se estropease y el servicio de cleanup limpiase el stage al volver, si se borrase el mail padre, etc.
             # Pero la subida ya se completó, así que se encola el objeto para no dejarlo huérfano en Supabase
             crud.create_storage_cleanup(
-                session=self.session, storage_path=storage_path
+                session=self.session, 
+                storage_path=storage_path
             )
             self.session.commit()
             raise MailIngestionError("Attachment stage disappeared during upload")
@@ -343,7 +399,11 @@ class MailIngestionService:
         return public_attachment_stage(attachment_stage)
 
     async def finalize_ingestion(
-        self, ingestion_id: UUID, user_id: UUID
+        self,
+        ingestion_id: UUID,
+        user_id: UUID,
+        *,  # Separador de argumentos principales de la dependencia opcional
+        omitted_attachment_summary: list[dict[str, str]] = [],
     ) -> FinalizedMailResult:
         logger.info("Setting up mail and attachments from staging")
 
@@ -406,6 +466,12 @@ class MailIngestionService:
                 user_id=user_id,
             )
             for staged_attachment in stored_attachments:
+                storage_path = staged_attachment.storage_path
+                # Comprobación de consistencia de la aplicación
+                if storage_path is None:
+                    raise MailIngestionError(
+                        "Attachment stage has no storage path despite being stored"
+                    )   
                 attachment_source = crud.create_source(
                     session=self.session, origin="attachment", user_id=user_id
                 )
@@ -414,7 +480,7 @@ class MailIngestionService:
                     source_id=attachment_source.id,
                     filename=staged_attachment.filename,
                     mime_type=staged_attachment.mime_type,
-                    storage_path=staged_attachment.storage_path,
+                    storage_path=storage_path,
                     extraction=None,
                 )
                 # Los objetos de las relaciones siempre se añaden después de la asignación principal
@@ -422,7 +488,7 @@ class MailIngestionService:
                 db_attachment.mail = db_mail
                 self.session.add(db_attachment)
 
-            omitted_attachments = [
+            omitted_attachments: list[dict[str, str | None]] = [
                 {
                     "external_id": attachment.external_id,
                     "reason": attachment.reason,
@@ -430,6 +496,17 @@ class MailIngestionService:
                 for attachment in staged_attachments
                 if attachment.status == "omitted"
             ]
+
+            # Añade los omitidos que vengan de un descarte del triaje
+            if omitted_attachment_summary:
+                omitted_attachments.extend(
+                    {
+                        "external_id": omitted["external_id"],
+                        "reason": omitted["reason"],
+                    }
+                    for omitted in omitted_attachment_summary
+                )
+
             stage.status = "completed"
             stage.mail_id = db_mail.id  # Establece la relación Foreign Key con el Mail recién creado
             # Mete los attachments omitidos en el resumen de mail_stage y borra todos los attachment_stage

@@ -64,6 +64,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "langchain" },
     { name = "langchain-openai" },
+    { name = "langchain-typesafe" },
     { name = "langgraph" },
     { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
     { name = "openai" },
@@ -104,6 +105,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.4,<4.0.0" },
     { name = "langchain", specifier = ">=1.0.0,<2.0.0" },
     { name = "langchain-openai", specifier = ">=1.7.3,<2.0.0" },
+    { name = "langchain-typesafe", specifier = ">=0.0.2,<0.1.0" },
     { name = "langgraph", specifier = ">=1.0.0,<2.0.0" },
     { name = "markitdown", extras = ["docx", "pdf", "pptx", "xlsx"], specifier = ">=0.1.9" },
     { name = "openai", specifier = ">=2.45.0" },
@@ -117,7 +119,7 @@ requires-dist = [
     { name = "sentry-sdk", extras = ["fastapi"], specifier = ">=2.0.0,<3.0.0" },
     { name = "sqlmodel", specifier = ">=0.0.21,<1.0.0" },
     { name = "supabase", specifier = ">=2.10.0,<3.0.0" },
-    { name = "tenacity", specifier = ">=8.2.3,<9.0.0" },
+    { name = "tenacity", specifier = ">=9.0.0,<10.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1023,6 +1025,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/cb/8b/d908d082c3cf5368ddd1816ed114de79c873f979ba7f98b95fab0e841643/langchain_protocol-0.0.20.tar.gz", hash = "sha256:0f5bd002474265648e91161771a9e0438fe9480bd55a416e51af0f60070637ec", size = 6280, upload-time = "2026-10-20T11:13:50.84Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/4b/f1c99a0b27c5ff8b4b131c0d6e62012c17cc424089efe213767db927afd2/langchain_protocol-0.0.20-py3-none-any.whl", hash = "sha256:3c935e5e46b0f6f9cb52f45ba7cfa53d1b9fa80c82c4a277d47f03e07f7385b1", size = 7347, upload-time = "2026-10-20T11:13:49.566Z" },
+]
+
+[[package]]
+name = "langchain-typesafe"
+version = "0.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx2" },
+    { name = "langchain-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6f/66/30ac39277a2b487d362ca83086f8c064cc025c5c48c25b4b172cf8e377cd/langchain_typesafe-0.0.2.tar.gz", hash = "sha256:76e0aad3048f3f4c3d79fe7051d728aa34b7e37ba7785ecdae9b8bf11fd4e5d0", size = 201244, upload-time = "2026-11-05T22:56:41.132Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ad/27/94d7c5c2b7d80a22e8fccdecc0b3313c11842a9b60431cf5971c489e145c/langchain_typesafe-0.0.2-py3-none-any.whl", hash = "sha256:6a1df08654a4651ac7bd6f8456e717e578d6e7c236028ad87710ea2600d4b0b1", size = 25157, upload-time = "2026-11-05T22:56:39.482Z" },
 ]
 
 [[package]]
@@ -2429,11 +2444,11 @@ wheels = [
 
 [[package]]
 name = "tenacity"
-version = "8.5.0"
+version = "9.2.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a3/4d/6a19536c50b849338fcbe9290d562b52cbdcf30d8963d3588a68a4107df1/tenacity-8.5.0.tar.gz", hash = "sha256:8bc6c0c8a09b31e6cad13c47afbed1a567518250a9a171418582ed8d9c20ca78", size = 47309, upload-time = "2024-07-05T07:25:31.836Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/9e/497c1c8ebe5a5b5d1d4a7511aea22c0bb1a97e3170d98abdef0e1b34265a/tenacity-9.2.1.tar.gz", hash = "sha256:a606b5c808d0cded4a359d5b9932d867ff2a6a6b64d37350260fd01bbdf83839", size = 58261, upload-time = "2026-10-07T12:13:01.633Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/3f/8ba87d9e287b9d385a02a7114ddcef61b26f86411e121c9003eb509a1773/tenacity-8.5.0-py3-none-any.whl", hash = "sha256:b594c2a5945830c267ce6b79a166228323ed52718f30302c1359836112346687", size = 28165, upload-time = "2024-07-05T07:25:29.591Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/26/1ff2b0721ac66a3ec5b1402b333110b352ab0a8724052ac279a7b82d40c4/tenacity-9.2.1-py3-none-any.whl", hash = "sha256:9e56f17539296baab7beabb08b92f6ee3d7be92d8be72d763360677c2ad6580e", size = 32310, upload-time = "2026-10-07T12:13:00.102Z" },
 ]
 
 [[package]]

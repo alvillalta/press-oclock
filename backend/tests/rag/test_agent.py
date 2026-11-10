@@ -15,7 +15,7 @@ from app.models import ChunkCreate, Mail
 from app.rag import rag_agent as agent_module
 from app.rag import rag_tools as tools_module
 from app.rag.embedding import EmbeddingResponseError, EmbeddingService
-from app.rag.rag_agent import AgentService
+from app.rag.rag_agent import RagAgentService
 from app.rag.retrieval import RetrievalService
 from app.schemas.langchain_dtos import RagAgentContext, RagAgentResponse, RagAgentState
 from app.services.rag_service import RagService
@@ -189,7 +189,7 @@ async def test_agent_answers_directly_without_searching(
 
     created = install_fake_agent(monkeypatch, behavior)
 
-    response = await AgentService().agent_answer(
+    response = await RagAgentService().agent_answer(
         "¿Cuánto es 2 + 2?",
         session=db,
         user_id=uuid4(),
@@ -234,13 +234,15 @@ async def test_agent_search_builds_citations_from_user_evidence(
         fake_generate_question_embedding,
     )
 
+    max_agent_steps = 4
+
     async def behavior(
         tools: list[Any],
         agent_input: dict[str, Any],
         context: RagAgentContext,
         config: dict[str, Any],
     ) -> dict[str, Any]:
-        assert config["recursion_limit"] == agent_module.MAX_AGENT_STEPS
+        assert config["recursion_limit"] == max_agent_steps
         assert context.session is db
         assert context.user_id == first_user.id
 
@@ -266,7 +268,7 @@ async def test_agent_search_builds_citations_from_user_evidence(
 
     install_fake_agent(monkeypatch, behavior)
 
-    response = await AgentService().agent_answer(
+    response = await RagAgentService(max_agent_steps=max_agent_steps).agent_answer(
         "¿Cuándo fue la rueda de prensa?",
         session=db,
         user_id=first_user.id,
@@ -330,7 +332,7 @@ async def test_agent_search_without_results_has_no_citations(
 
     install_fake_agent(monkeypatch, behavior)
 
-    response = await AgentService().agent_answer(
+    response = await RagAgentService().agent_answer(
         "¿Qué dijo el remitente sobre la nota de prensa?",
         session=db,
         user_id=user.id,
@@ -383,7 +385,7 @@ async def test_search_tool_embedding_error_is_propagated(
     install_fake_agent(monkeypatch, behavior)
 
     with pytest.raises(EmbeddingResponseError, match="Embedding dimensions mismatch"):
-        await AgentService().agent_answer(
+        await RagAgentService().agent_answer(
             "¿Qué dijo el remitente sobre la nota de prensa?",
             session=db,
             user_id=user.id,
@@ -441,7 +443,7 @@ async def test_search_tool_generic_error_is_propagated(
     install_fake_agent(monkeypatch, behavior)
 
     with pytest.raises(RuntimeError, match="Database unavailable"):
-        await AgentService().agent_answer(
+        await RagAgentService().agent_answer(
             "¿Qué dijo el remitente sobre la nota de prensa?",
             session=db,
             user_id=user.id,
@@ -494,7 +496,7 @@ async def test_search_tool_embedding_provider_error_is_propagated(
     install_fake_agent(monkeypatch, behavior)
 
     with pytest.raises(RuntimeError, match="Question embedding failed"):
-        await AgentService().agent_answer(
+        await RagAgentService().agent_answer(
             "¿Qué dijo el remitente sobre la nota de prensa?",
             session=db,
             user_id=user.id,
@@ -517,7 +519,7 @@ async def test_agent_execution_error_is_wrapped(
     install_fake_agent(monkeypatch, behavior)
 
     with pytest.raises(RuntimeError, match="Agent execution failed") as exc_info:
-        await AgentService().agent_answer(
+        await RagAgentService().agent_answer(
             "Pregunta",
             session=db,
             user_id=uuid4(),
@@ -567,7 +569,7 @@ async def test_rag_service_persists_direct_answer_without_citations(
     user = create_random_user(db)
     assert user.id is not None
 
-    class FakeAgentService:
+    class FakeRagAgentService:
         async def agent_answer(
             self,
             _question: str,
@@ -580,8 +582,8 @@ async def test_rag_service_persists_direct_answer_without_citations(
             return RagAgentResponse(answer="Respuesta directa.", citations=[])
 
     monkeypatch.setattr(
-        "app.services.rag_service.AgentService",
-        FakeAgentService,
+        "app.services.rag_service.RagAgentService",
+        FakeRagAgentService,
     )
 
     question = await RagService(session=db).rag_answer("Pregunta general", user.id)
