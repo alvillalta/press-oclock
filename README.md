@@ -51,6 +51,7 @@ This demo shows the main **Press O'clock** application behavior.
 - **Optimized context retrieval** - Expands retrieved context with contiguous chunks for better LLM responses
 - **Source traceability** - Every response links back to original sources, including text excerpts and email metadata
 - **Automated email ingestion** - Make.com webhook integration decouples email capture from internal processing
+- **Automated mail triage with Jev** - Screens every incoming email for spam, toxicity, prompt injection attempts and insufficient body text before storing attachments or indexing into RAG. Mails resolve to `continue`, `review`, `blocked` or `failed`; blocked mails are not processed. Runs through `langchain-typesafe`
 - **Natural language queries** - Ask questions about your press releases in plain English
 
 ### Technology Stack Features
@@ -82,6 +83,8 @@ This demo shows the main **Press O'clock** application behavior.
 | **Data Validation** | Pydantic | ≥2.12.5 |
 | **OpenAI SDK** | openai | 3.39.0 |
 | **LangChain OpenAI** | langchain-openai | 1.7.3 |
+| **Agent Orchestration** | LangGraph | 1.2.18 |
+| **Mail Triage** | TypeSafe Jev (langchain-typesafe) | 0.0.2 |
 | **Database** | PostgreSQL | Latest |
 | **Frontend Framework** | React | Latest |
 | **Build Tool** | Vite | Latest |
@@ -114,8 +117,12 @@ The AI dependencies currently installed are:
 | `langchain` | 1.4.7 | Agent orchestration through `create_agent` |
 | `langchain-openai` | 1.7.3 | LangChain adapters for OpenAI chat and embeddings |
 | `langchain-core` | 1.7.0 | Core LangChain interfaces, included transitively |
+| `langgraph` | 1.2.18 | Graph runtime that powers agent orchestration |
+| `langchain-typesafe` | 0.0.2 | TypeSafe adapter used to call the Jev classifier |
 
 Chat, vision extraction and embeddings use `ChatOpenAI` and `OpenAIEmbeddings` through cached adapters in `backend/app/integrations/openai_client.py`. The agent decides between answering directly and searching the user's emails; retrieval still uses SQL/pgvector, chunking and persistence as before, and MarkItDown still handles PDF, DOCX, PPTX and XLSX extraction.
+
+Before a mail is stored or indexed, `MailTriageService` screens it with the TypeSafe Jev classifier (`jev-1.14.0`) through the adapter in `backend/app/integrations/typesafe_client.py`. The call has a 15-second timeout, retries up to 3 times and sends a body bounded to 5,000 characters. If the classifier or its response is invalid, triage fails open: the error is logged and ingestion continues.
 
 When changing Python or AI dependencies:
 
@@ -143,6 +150,7 @@ press-oclock/
 │   │   ├── initial_data.py         # Database seeding logic
 │   │   ├── backend_pre_start.py    # Waits for the database before migrations
 │   │   ├── tests_pre_start.py      # Waits for the database before running tests
+│   │   ├── cleanup_mail_ingestions.py # Scheduled cleanup of expired staged uploads
 │   │   ├── utils.py                # Utility functions (emails, tokens)
 │   │   │
 │   │   ├── api/
@@ -163,16 +171,30 @@ press-oclock/
 │   │   │   └── security.py         # JWT authentication & password hashing
 │   │   │
 │   │   ├── services/
-│   │   │   ├── mail_service.py     # Mail ingestion & embedding pipeline
-│   │   │   └── rag_service.py      # RAG (Retrieval-Augmented Generation)
+│   │   │   ├── mail_ingestion_service.py # Mail ingestion & embedding pipeline
+│   │   │   ├── mail_triage_service.py    # Jev-based mail screening
+│   │   │   ├── rag_service.py            # RAG (Retrieval-Augmented Generation)
+│   │   │   └── storage_cleanup_service.py # Expired staged upload cleanup
+│   │   │
+│   │   ├── triage/
+│   │   │   └── triage_policy.py    # Triage thresholds & decision rules
+│   │   │
+│   │   ├── extraction/
+│   │   │   ├── attachment_processing.py # Attachment extraction orchestration
+│   │   │   ├── chunk_indexing.py   # Chunk indexing after persistence
+│   │   │   ├── extraction.py       # Text extraction (MarkItDown / vision)
+│   │   │   ├── mail_processing.py  # Mail body normalization & processing
+│   │   │   └── mime_types.py       # Attachment MIME type handling
 │   │   │
 │   │   ├── integrations/
-│   │   │   ├── email_provider.py   # Email provider abstraction
-│   │   │   └── openai_client.py    # Cached LangChain OpenAI adapters
+│   │   │   ├── attachment_storage.py      # Attachment storage abstraction
+│   │   │   ├── openai_client.py           # Cached LangChain OpenAI adapters
+│   │   │   ├── supabase_storage_client.py # Supabase Storage client
+│   │   │   └── typesafe_client.py         # TypeSafe Jev classifier adapter
 │   │   │
 │   │   ├── rag/
-│   │   │   ├── agent.py            # Agent that decides when to search
-│   │   │   ├── tools.py            # User-scoped email search tool
+│   │   │   ├── rag_agent.py        # Agent that decides when to search
+│   │   │   ├── rag_tools.py        # User-scoped email search tool
 │   │   │   ├── chunking.py         # Text chunking for embeddings
 │   │   │   ├── embedding.py        # Embedding generation
 │   │   │   ├── generation.py       # Answer generation logic
@@ -180,6 +202,9 @@ press-oclock/
 │   │   │   ├── augmentation.py     # Contiguous chunk expansion
 │   │   │   ├── citations.py        # Citation building from sources
 │   │   │   └── metadata.py         # Source metadata aggregation
+│   │   │
+│   │   ├── schemas/
+│   │   │   └── langchain_dtos.py   # DTOs bridging the app and LangChain
 │   │   │
 │   │   ├── email-templates/
 │   │   │   ├── src/                # Email template source files
@@ -193,7 +218,9 @@ press-oclock/
 │   ├── tests/
 │   │   ├── api/routes/             # Endpoint tests
 │   │   ├── crud/                   # CRUD tests
+│   │   ├── extraction/             # Extraction & indexing tests
 │   │   ├── rag/                    # RAG pipeline tests
+│   │   ├── unit/                   # Triage & TypeSafe client tests
 │   │   ├── utils/                  # Test helpers
 │   │   ├── scripts/                # Test startup scripts
 │   │   └── conftest.py             # Pytest configuration & fixtures
@@ -246,7 +273,6 @@ press-oclock/
 │   │   ├── auth.setup.ts           # Authentication setup
 │   │   ├── login.spec.ts           # Login tests
 │   │   ├── sign-up.spec.ts         # Sign-up tests
-│   │   ├── items.spec.ts           # Items feature tests
 │   │   ├── user-settings.spec.ts   # User settings tests
 │   │   ├── reset-password.spec.ts  # Password reset tests
 │   │   ├── config.ts               # Test configuration
@@ -266,8 +292,7 @@ press-oclock/
 ├── scripts/
 │   ├── test-local.sh               # Local testing script
 │   ├── test.sh                     # Docker testing script
-│   ├── generate-client.sh          # Generate TypeScript client
-│   └── add_latest_release_date.py  # Release notes helper
+│   └── generate-client.sh          # Generate TypeScript client
 │
 ├── .github/workflows/              # CI/CD (tests, lint, deploy)
 │
@@ -279,11 +304,9 @@ press-oclock/
 ├── .python-version                 # Python version used by uv and CI
 ├── package.json                    # Root Node.js configuration
 ├── .pre-commit-config.yaml         # Pre-commit hooks
-├── copier.yml                      # Project template configuration
 │
 ├── deployment.md                   # Deployment guide
 ├── development.md                  # Development guide
-├── CONTRIBUTING.md                 # Contribution guidelines
 ├── LICENSE
 └── README.md
 

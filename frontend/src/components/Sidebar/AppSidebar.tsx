@@ -34,7 +34,6 @@ export function AppSidebar() {
         <RecentQuestions />
       </SidebarContent>
       <SidebarFooter>
-        {/* <SidebarAppearance /> */}
         <User user={currentUser} />
       </SidebarFooter>
     </Sidebar>

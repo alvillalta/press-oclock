@@ -172,15 +172,6 @@ class MailIngestionService:
             )
         return public_mail_stage(finalized_stage)
 
-    @staticmethod
-    def _blocked_attachment_summary(
-        attachment_external_ids: list[str],
-    ) -> list[dict[str, str]]:
-        return [
-            {"external_id": external_id, "reason": "mail_triage_blocked"}
-            for external_id in attachment_external_ids
-        ]
-
     def start_ingestion(
         self, *, mail_in: MailStageCreate, user_id: UUID
     ) -> MailStagePublic:

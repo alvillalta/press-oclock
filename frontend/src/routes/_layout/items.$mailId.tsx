@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_layout/items/$mailId")({
   head: () => ({
     meta: [
       {
-        title: "Mail Detail - FastAPI Template",
+        title: "Mail Detail - Press O'clock",
       },
     ],
   }),

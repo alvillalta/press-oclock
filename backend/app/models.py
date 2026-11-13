@@ -333,13 +333,6 @@ class ChunkCreate(ChunkBase):
     )
 
 
-class ChunkUpdate(SQLModel):
-    content: str = Field(
-        min_length=1,
-        max_length=800,
-    )
-
-
 class Chunk(ChunkCreate, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     source_id: uuid.UUID = Field(
