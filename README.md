@@ -273,7 +273,6 @@ press-oclock/
 │   │   ├── auth.setup.ts           # Authentication setup
 │   │   ├── login.spec.ts           # Login tests
 │   │   ├── sign-up.spec.ts         # Sign-up tests
-│   │   ├── items.spec.ts           # Items feature tests
 │   │   ├── user-settings.spec.ts   # User settings tests
 │   │   ├── reset-password.spec.ts  # Password reset tests
 │   │   ├── config.ts               # Test configuration
@@ -293,8 +292,7 @@ press-oclock/
 ├── scripts/
 │   ├── test-local.sh               # Local testing script
 │   ├── test.sh                     # Docker testing script
-│   ├── generate-client.sh          # Generate TypeScript client
-│   └── add_latest_release_date.py  # Release notes helper
+│   └── generate-client.sh          # Generate TypeScript client
 │
 ├── .github/workflows/              # CI/CD (tests, lint, deploy)
 │
@@ -306,11 +304,9 @@ press-oclock/
 ├── .python-version                 # Python version used by uv and CI
 ├── package.json                    # Root Node.js configuration
 ├── .pre-commit-config.yaml         # Pre-commit hooks
-├── copier.yml                      # Project template configuration
 │
 ├── deployment.md                   # Deployment guide
 ├── development.md                  # Development guide
-├── CONTRIBUTING.md                 # Contribution guidelines
 ├── LICENSE
 └── README.md
 

@@ -3,11 +3,6 @@ import { Link } from "@tanstack/react-router"
 import { cn } from "@/lib/utils"
 import pressOclockLogo from "/assets/images/press-oclock.png"
 
-/* import icon from "/assets/images/fastapi-icon.svg"
-import iconLight from "/assets/images/fastapi-icon-light.svg"
-import logo from "/assets/images/fastapi-logo.svg"
-import logoLight from "/assets/images/fastapi-logo-light.svg" */
-
 interface LogoProps {
   variant?: "full" | "icon" | "responsive"
   className?: string
@@ -19,8 +14,6 @@ export function Logo({
   className,
   asLink = true,
 }: LogoProps) {
-  /*   const fullLogo = isDark ? logoLight : logo
-  const iconLogo = isDark ? iconLight : icon */
   const fullLogo = pressOclockLogo
   const iconLogo = pressOclockLogo
 

@@ -1,5 +1,5 @@
 {
-  "name": "fastapi-full-stack-template",
+  "name": "press-oclock",
   "private": true,
   "workspaces": [
     "frontend"

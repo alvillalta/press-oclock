@@ -12,9 +12,9 @@ const PendingItems = () => (
   <Table>
     <TableHeader>
       <TableRow>
-        <TableHead>ID</TableHead>
-        <TableHead>Title</TableHead>
-        <TableHead>Description</TableHead>
+        <TableHead>Sender</TableHead>
+        <TableHead>Subject</TableHead>
+        <TableHead>Received</TableHead>
         <TableHead>
           <span className="sr-only">Actions</span>
         </TableHead>
