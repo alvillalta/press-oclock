@@ -1,0 +1,18 @@
+name: press-oclock-test
+
+services:
+  db-test:
+    # Misma versión mayor de Postgres y de vector que la base de Supabase
+    image: pgvector/pgvector:0.8.0-pg17
+    env_file:
+      - backend/tests/test.env
+    ports:
+      - "127.0.0.1:5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      # -h fuerza TCP: durante la inicialización Postgres solo escucha por socket local
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

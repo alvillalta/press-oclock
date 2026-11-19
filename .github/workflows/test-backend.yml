@@ -3,7 +3,7 @@ name: Test Backend
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     types:
       - opened
@@ -15,20 +15,6 @@ jobs:
   test-backend:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      ENVIRONMENT: local
-      PROJECT_NAME: "Press O'Clock"
-      SECRET_KEY: test_secret_key_for_ci
-      FIRST_SUPERUSER: admin@example.com
-      FIRST_SUPERUSER_PASSWORD: test_superuser_password
-      POSTGRES_SERVER: localhost
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      MAKE_API_KEY: test_make_api_key
-      OPENAI_API_KEY: test_openai_api_key
-      TYPESAFE_API_KEY: test_typesafe_api_key
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -39,37 +25,17 @@ jobs:
         with:
           python-version-file: .python-version
       - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # Before upgrading uv version, make sure astral-sh/setup-uv knows its checksum.
           # See: https://github.com/astral-sh/setup-uv/issues/851#issuecomment-4282017837
-          version: "0.11.4"
-      - name: Create .env file
-        run: |
-          cat > .env <<EOF
-          ENVIRONMENT=${ENVIRONMENT}
-          PROJECT_NAME="${PROJECT_NAME}"
-          SECRET_KEY=${SECRET_KEY}
-          FIRST_SUPERUSER=${FIRST_SUPERUSER}
-          FIRST_SUPERUSER_PASSWORD=${FIRST_SUPERUSER_PASSWORD}
-          POSTGRES_SERVER=${POSTGRES_SERVER}
-          POSTGRES_PORT=${POSTGRES_PORT}
-          POSTGRES_DB=${POSTGRES_DB}
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-          MAKE_API_KEY=${MAKE_API_KEY}
-          OPENAI_API_KEY=${OPENAI_API_KEY}
-          TYPESAFE_API_KEY=${TYPESAFE_API_KEY}
-          EOF
-      - run: docker compose down -v --remove-orphans
-      - run: docker compose up -d db mailcatcher
-      - name: Migrate DB
-        run: uv run bash scripts/prestart.sh
-        working-directory: backend
+          version: "0.13.9"
+      # Los tests cargan backend/tests/test.env y aplican las migraciones al arrancar
+      - run: docker compose -f compose.test.yml up -d --wait
       - name: Run tests
-        run: uv run bash scripts/tests-start.sh "Coverage for ${{ github.sha }}"
+        run: uv run bash scripts/test.sh "Coverage for ${{ github.sha }}"
         working-directory: backend
-      - run: docker compose down -v --remove-orphans
+      - run: docker compose -f compose.test.yml down -v
       - name: Store coverage files
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:

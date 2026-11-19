@@ -105,6 +105,9 @@ services:
         - NODE_ENV=development
 
   playwright:
+    # Tests E2E pausados mientras la interfaz está en desarrollo: solo se levanta con --profile e2e
+    profiles:
+      - e2e
     build:
       context: .
       dockerfile: frontend/Dockerfile.playwright

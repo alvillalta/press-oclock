@@ -1,11 +1,11 @@
 #! /usr/bin/env sh
 
-# Exit in case of error
+# Lanza los tests del backend contra la base de pruebas desechable de compose.test.yml
 set -e
 set -x
 
-docker compose build
-docker compose down -v --remove-orphans # Remove possibly previous broken stacks left hanging after an error
-docker compose up -d
-docker compose exec -T backend bash scripts/tests-start.sh "$@"
-docker compose down -v --remove-orphans
+cd "$(dirname "$0")/.."
+docker compose -f compose.test.yml up -d --wait
+# Elimina la base de pruebas al terminar, también si los tests fallan
+trap 'docker compose -f compose.test.yml down -v' EXIT
+(cd backend && uv run bash scripts/test.sh "$@")

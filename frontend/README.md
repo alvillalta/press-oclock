@@ -92,30 +92,29 @@ The frontend code is structured as follows:
 
 ## End-to-End Testing with Playwright
 
-The frontend includes initial end-to-end tests using Playwright. To run the tests, you need to have the Docker Compose stack running. Start the stack with the following command:
+> **Paused.** Do not run the end-to-end tests (`bun run test`, `bun run test:ui`, `bunx playwright test`) until they have their own test database.
 
-```bash
-docker compose up -d --wait backend
-```
+The tests in `frontend/tests/` come from the original template and are paused while the interface is in development:
 
-Then, you can run the tests with the following command:
+* The `Playwright Tests` workflow only runs when triggered manually from GitHub Actions.
+* The `playwright` service in `compose.override.yml` only starts with `--profile e2e`.
 
-```bash
-bunx playwright test
-```
+**Why they are paused:** the tests run against the `backend` service of `compose.yml`, which loads the real `.env`. If that file points to Supabase, the tests create and delete users in the real database (`admin.spec.ts` deletes users).
 
-You can also run your tests in UI mode to see the browser and interact with it running:
+### Pending work before resuming them
 
-```bash
-bunx playwright test --ui
-```
+* **Isolated database:** run the `backend` service with a test configuration and a disposable database during the end-to-end tests, like the backend tests do with `backend/tests/test.env` and `compose.test.yml`.
+* **Test credentials:** `frontend/tests/config.ts` reads `FIRST_SUPERUSER` and `FIRST_SUPERUSER_PASSWORD` from the real `.env`. Read them from a test configuration instead.
+* **Tests for this project's features:** the current tests only cover what the template provides: login, sign up, password recovery, user settings and user administration. There are no tests for mails (`/items`) or questions.
+* **Review against the template:** this project started from commit `38302d7` (2026-05-29) of the [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template). List what has changed upstream in the end-to-end setup since then:
 
-To stop and remove the Docker Compose stack and clean the data created in tests, use the following command:
+  ```bash
+  git remote add template https://github.com/fastapi/full-stack-fastapi-template.git
+  git fetch template
+  git log --oneline 38302d7..template/master -- frontend/tests frontend/playwright.config.ts frontend/Dockerfile.playwright .github/workflows/playwright.yml compose.override.yml
+  ```
 
-```bash
-docker compose down -v
-```
-
-To update the tests, navigate to the tests directory and modify the existing test files or add new ones as needed.
+* **`.env` in CI:** `.github/workflows/playwright.yml` does not create a `.env` file, and `compose.yml` does not start without one.
+* **Re-enable the workflow:** add the `pull_request` trigger back to `.github/workflows/playwright.yml`, and use `main` if you add a `push` trigger.
 
 For more information on writing and running Playwright tests, refer to the official [Playwright documentation](https://playwright.dev/docs/intro).

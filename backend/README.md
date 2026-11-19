@@ -102,31 +102,31 @@ Nevertheless, if it doesn't detect a change but a syntax error, it will just sto
 
 ## Backend tests
 
-To test the backend run:
+The tests run with Pytest against a disposable Postgres container, never against the database configured in `.env`. From the repository root, run:
 
-```console
-$ bash ./scripts/test.sh
+```bash
+bash scripts/test.sh
 ```
 
-The tests run with Pytest, modify and add tests to `./backend/tests/`.
+That script starts the test database, runs the tests with coverage and removes the database when it finishes, even if the tests fail.
+
+To pass arguments to Pytest, for example to run a single file, start the test database yourself from the repository root:
+
+```bash
+docker compose -f compose.test.yml up -d --wait
+cd backend
+uv run pytest
+```
+
+When you finish, remove the test database from the repository root:
+
+```bash
+docker compose -f compose.test.yml down -v
+```
+
+The tests load their configuration from `./backend/tests/test.env` and abort if the database is not a local one whose name ends in `_test`. Modify and add tests to `./backend/tests/`.
 
 If you use GitHub Actions the tests will run automatically.
-
-### Test running stack
-
-If your stack is already up and you just want to run the tests, you can use:
-
-```bash
-docker compose exec backend bash scripts/tests-start.sh
-```
-
-That `/app/scripts/tests-start.sh` script just calls `pytest` after making sure that the rest of the stack is running. If you need to pass extra arguments to `pytest`, you can pass them to that command and they will be forwarded.
-
-For example, to stop on first error:
-
-```bash
-docker compose exec backend bash scripts/tests-start.sh -x
-```
 
 ### Test Coverage
 

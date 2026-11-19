@@ -149,7 +149,6 @@ press-oclock/
 │   │   ├── models.py               # SQLModel models (User, Source, Mail, Attachment, Chunk, Question)
 │   │   ├── initial_data.py         # Database seeding logic
 │   │   ├── backend_pre_start.py    # Waits for the database before migrations
-│   │   ├── tests_pre_start.py      # Waits for the database before running tests
 │   │   ├── cleanup_mail_ingestions.py # Scheduled cleanup of expired staged uploads
 │   │   ├── utils.py                # Utility functions (emails, tokens)
 │   │   │
@@ -229,8 +228,7 @@ press-oclock/
 │   │   ├── format.sh               # Code formatting script
 │   │   ├── lint.sh                 # Linting script
 │   │   ├── test.sh                 # Run tests
-│   │   ├── prestart.sh             # Pre-startup setup
-│   │   └── tests-start.sh          # Start tests in docker
+│   │   └── prestart.sh             # Pre-startup setup
 │   │
 │   ├── Dockerfile                  # Container image for backend
 │   ├── pyproject.toml              # Python project configuration
@@ -290,8 +288,7 @@ press-oclock/
 │   └── README.md
 │
 ├── scripts/
-│   ├── test-local.sh               # Local testing script
-│   ├── test.sh                     # Docker testing script
+│   ├── test.sh                     # Run backend tests against the test database
 │   └── generate-client.sh          # Generate TypeScript client
 │
 ├── .github/workflows/              # CI/CD (tests, lint, deploy)

@@ -82,6 +82,7 @@ def install_fake_agent(
         model: object,
         tools: list[Any],
         system_prompt: str,
+        middleware: list[Any],
         context_schema: object,
         state_schema: object,
     ) -> Any:
@@ -100,6 +101,7 @@ def install_fake_agent(
         created["model"] = model
         created["tools"] = tools
         created["system_prompt"] = system_prompt
+        created["middleware"] = middleware
         created["context_schema"] = context_schema
         created["state_schema"] = state_schema
         return FakeAgent()
@@ -198,6 +200,7 @@ async def test_agent_answers_directly_without_searching(
     assert response.answer == "4"
     assert response.citations == []
     assert len(created["tools"]) == 1
+    assert created["middleware"] == [agent_module.ensure_final_answer]
     assert created["context_schema"] is RagAgentContext
     assert created["state_schema"] is RagAgentState
 

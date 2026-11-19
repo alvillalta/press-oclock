@@ -1,3 +1,4 @@
+import os
 import uuid
 import warnings
 from typing import Annotated, Any, Literal, Self
@@ -28,7 +29,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     model_config = SettingsConfigDict(
         # Use top level .env file (one level above ./backend/)
-        env_file="../.env",
+        # Los tests indican su propio fichero para no cargar nunca el .env real
+        env_file=os.environ.get("TEST_ENV_FILE", "../.env"),
         env_ignore_empty=True,
         extra="ignore",
     )

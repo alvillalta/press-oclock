@@ -16,6 +16,7 @@ Style guide for working in this repository. These are defaults: an explicit inst
 - Keep functions short and focused on one job. Prefer early returns over deep nesting.
 - Do not leave dead code, commented-out code, debug prints, or unused imports behind.
 - Comment the why, not the what. Do not add comments that restate the code.
+- Write all code comments in Spanish.
 - Reuse existing helpers and utilities before writing new ones. Do not duplicate logic.
 - Do not add abstractions, options, or configuration for needs that do not exist yet.
 
@@ -46,13 +47,13 @@ Style guide for working in this repository. These are defaults: an explicit inst
 
 - Before reporting work as done, run the linter and type checker for the code you touched and fix what they report.
 - Never claim something works without having checked it. If a check was skipped or failed, say so.
+- Do not run the Playwright end-to-end tests (`bun run test`, `bun run test:ui`, `bunx playwright test`) until they have their own test database: the backend they use loads the real `.env`. See `frontend/README.md`.
 
 ```bash
 # Backend: lint, format, types
 uv run --project backend ruff check backend/app
 uv run --project backend ruff format --check backend/app
 uv run --project backend mypy backend/app
-uv run --project backend ty check backend/app
 
 # Frontend: lint/format, then types and production build
 bun run lint
